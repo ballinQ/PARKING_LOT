@@ -255,6 +255,12 @@ Used to:
 
 ---
 
+## Phase 1 Self-Test
+
+A complete manual self-test checklist for all Phase 1 features is available at:
+
+- `PHASE1_SELF_TEST.md`
+
 ## When to Move to Phase 2
 
 We agreed that we should only move to Phase 2 when Phase 1 is **boringly reliable**.
