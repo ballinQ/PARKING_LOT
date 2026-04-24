@@ -7,8 +7,40 @@ protocol ParkingNotificationServiceProtocol {
     func cancelNotifications(for sessionID: UUID) async
 }
 
+// MARK: - Testable UNUserNotificationCenter wrapper
+
+protocol UserNotificationCenterProtocol {
+    func notificationSettings() async -> UNNotificationSettings
+    func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool
+    func add(_ request: UNNotificationRequest) async throws
+    func removePendingNotificationRequests(withIdentifiers identifiers: [String])
+}
+
+extension UNUserNotificationCenter: UserNotificationCenterProtocol {
+    func add(_ request: UNNotificationRequest) async throws {
+        let _: Void = try await withCheckedThrowingContinuation { continuation in
+            add(request) { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+}
+
 final class ParkingNotificationService: ParkingNotificationServiceProtocol {
-    private let center = UNUserNotificationCenter.current()
+    private let center: UserNotificationCenterProtocol
+    private let nowProvider: () -> Date
+
+    init(
+        center: UserNotificationCenterProtocol = UNUserNotificationCenter.current(),
+        nowProvider: @escaping () -> Date = { Date() }
+    ) {
+        self.center = center
+        self.nowProvider = nowProvider
+    }
 
     func requestAuthorizationIfNeeded() async -> Bool {
         do {
@@ -36,9 +68,10 @@ final class ParkingNotificationService: ParkingNotificationServiceProtocol {
 
         let expiryDate = session.expectedEndTime
         let warningDate = expiryDate.addingTimeInterval(-15 * 60)
+        let now = nowProvider()
 
         // If warning time is already in the past, skip it.
-        if warningDate > Date() {
+        if warningDate > now {
             let warning = makeRequest(
                 id: warningID(for: session.id),
                 title: "Parking expires soon",
@@ -49,7 +82,7 @@ final class ParkingNotificationService: ParkingNotificationServiceProtocol {
         }
 
         // If expiry is already in the past, skip it.
-        if expiryDate > Date() {
+        if expiryDate > now {
             let expiry = makeRequest(
                 id: expiryID(for: session.id),
                 title: "Parking expired",
@@ -78,6 +111,6 @@ final class ParkingNotificationService: ParkingNotificationServiceProtocol {
         return UNNotificationRequest(identifier: id, content: content, trigger: trigger)
     }
 
-    private func warningID(for id: UUID) -> String { "parking_warning_\(id.uuidString)" }
-    private func expiryID(for id: UUID) -> String { "parking_expiry_\(id.uuidString)" }
+    func warningID(for id: UUID) -> String { "parking_warning_\(id.uuidString)" }
+    func expiryID(for id: UUID) -> String { "parking_expiry_\(id.uuidString)" }
 }

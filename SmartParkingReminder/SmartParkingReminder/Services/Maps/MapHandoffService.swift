@@ -2,6 +2,13 @@ import Foundation
 import MapKit
 import UIKit
 
+protocol URLLaunching {
+    func canOpenURL(_ url: URL) -> Bool
+    func open(_ url: URL, options: [UIApplication.OpenExternalURLOptionsKey: Any], completionHandler: ((Bool) -> Void)?)
+}
+
+extension UIApplication: URLLaunching {}
+
 /// Opens external map apps for navigation handoff.
 /// Phase 1: Apple Maps always available; Google Maps supported when installed.
 @MainActor
@@ -9,6 +16,12 @@ final class MapHandoffService {
     enum Provider {
         case appleMaps
         case googleMaps
+    }
+
+    private let launcher: URLLaunching
+
+    init(launcher: URLLaunching = UIApplication.shared) {
+        self.launcher = launcher
     }
 
     func openDirections(to coordinate: CLLocationCoordinate2D, placeName: String, preferred: Provider? = nil) {
@@ -29,6 +42,15 @@ final class MapHandoffService {
         _ = tryOpen(.appleMaps, coordinate: coordinate, placeName: placeName)
     }
 
+    // MARK: - URL builders (testable)
+
+    func googleMapsDirectionsURL(to coordinate: CLLocationCoordinate2D) -> URL? {
+        let lat = coordinate.latitude
+        let lon = coordinate.longitude
+        let urlString = "comgooglemaps://?daddr=\(lat),\(lon)&directionsmode=driving"
+        return URL(string: urlString)
+    }
+
     // MARK: - Private
 
     private func tryOpen(_ provider: Provider, coordinate: CLLocationCoordinate2D, placeName: String) -> Bool {
@@ -43,20 +65,13 @@ final class MapHandoffService {
             ])
 
         case .googleMaps:
-            // Prefer the Google Maps URL scheme when installed.
-            // Requires LSApplicationQueriesSchemes entry for canOpenURL("comgooglemaps://").
             guard let schemeURL = URL(string: "comgooglemaps://") else { return false }
-            guard UIApplication.shared.canOpenURL(schemeURL) else {
+            guard launcher.canOpenURL(schemeURL) else {
                 return false
             }
 
-            let lat = coordinate.latitude
-            let lon = coordinate.longitude
-
-            // directionsmode=driving, daddr=lat,lon
-            let urlString = "comgooglemaps://?daddr=\(lat),\(lon)&directionsmode=driving"
-            guard let url = URL(string: urlString) else { return false }
-            UIApplication.shared.open(url, options: [:], completionHandler: nil)
+            guard let url = googleMapsDirectionsURL(to: coordinate) else { return false }
+            launcher.open(url, options: [:], completionHandler: nil)
             return true
         }
     }

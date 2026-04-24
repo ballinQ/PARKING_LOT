@@ -5,7 +5,7 @@ struct HomeView: View {
 
     @State private var showingNewSession = false
 
-    let locationService: LocationService
+    let locationService: LocationServiceProtocol
 
     var body: some View {
         NavigationStack {
@@ -26,6 +26,7 @@ struct HomeView: View {
                         Text("End Parking")
                             .frame(maxWidth: .infinity)
                     }
+                    .accessibilityIdentifier(A11y.homeEndParkingButton)
                     .buttonStyle(.borderedProminent)
                 } else {
                     ContentUnavailableView(
@@ -33,6 +34,8 @@ struct HomeView: View {
                         systemImage: "parkingsign",
                         description: Text("Start a parking session to see the countdown and reminders.")
                     )
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier(A11y.homeNoActiveSessionView)
                 }
 
                 Spacer()
@@ -43,6 +46,7 @@ struct HomeView: View {
                     Text("Start Parking")
                         .frame(maxWidth: .infinity)
                 }
+                .accessibilityIdentifier(A11y.homeStartParkingButton)
                 .buttonStyle(.borderedProminent)
                 .sheet(isPresented: $showingNewSession) {
                     NewSessionView(locationService: locationService)

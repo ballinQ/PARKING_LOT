@@ -17,6 +17,7 @@ struct ActiveSessionCardView: View {
                 Text(remainingText)
                     .monospacedDigit()
                     .fontWeight(.medium)
+                    .accessibilityIdentifier(A11y.homeRemainingTimeLabel)
             }
 
             if !session.note.isEmpty {
@@ -38,5 +39,7 @@ struct ActiveSessionCardView: View {
         .padding()
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(A11y.homeActiveSessionCard)
     }
 }

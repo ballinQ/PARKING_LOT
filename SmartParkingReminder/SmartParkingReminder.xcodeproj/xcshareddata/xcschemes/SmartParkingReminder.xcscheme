@@ -39,6 +39,28 @@
          </BuildableReference>
       </MacroExpansion>
       <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "824A0938B60C6DE944BA99C6"
+               BuildableName = "SmartParkingReminderTests.xctest"
+               BlueprintName = "SmartParkingReminderTests"
+               ReferencedContainer = "container:SmartParkingReminder.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "BFBC976BD0483B275C422A81"
+               BuildableName = "SmartParkingReminderUITests.xctest"
+               BlueprintName = "SmartParkingReminderUITests"
+               ReferencedContainer = "container:SmartParkingReminder.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>

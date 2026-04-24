@@ -30,4 +30,30 @@ targets:
         INFOPLIST_KEY_LSApplicationQueriesSchemes:
           - comgooglemaps
     scheme:
-      testTargets: []
+      testTargets:
+        - SmartParkingReminderTests
+        - SmartParkingReminderUITests
+
+  SmartParkingReminderTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: SmartParkingReminderTests
+    dependencies:
+      - target: SmartParkingReminder
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.smartparking.SmartParkingReminderTests
+        GENERATE_INFOPLIST_FILE: YES
+
+  SmartParkingReminderUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: SmartParkingReminderUITests
+    dependencies:
+      - target: SmartParkingReminder
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.smartparking.SmartParkingReminderUITests
+        GENERATE_INFOPLIST_FILE: YES

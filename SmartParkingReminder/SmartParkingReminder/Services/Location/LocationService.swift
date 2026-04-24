@@ -1,8 +1,12 @@
 import CoreLocation
 import Foundation
 
+protocol LocationServiceProtocol: AnyObject {
+    func currentCoordinateOnce() async -> CLLocationCoordinate2D?
+}
+
 /// One-shot location capture helper (no continuous/background tracking).
-final class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
+class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate, LocationServiceProtocol {
     @Published private(set) var authorizationStatus: CLAuthorizationStatus = .notDetermined
 
     private let manager = CLLocationManager()

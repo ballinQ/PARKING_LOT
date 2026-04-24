@@ -1,341 +1,160 @@
-# PARKING_LOT
 # Smart Parking Reminder
 
-## Overview
+Local-only iOS MVP for recording a parking session, saving where the car is, showing a countdown, sending local reminders, and reviewing saved parking spots on a map.
 
-Smart Parking Reminder is a local-only iOS app built in **Swift** and **SwiftUI** to help users remember where they parked, track parking time, and get reminders before parking expires.
+This README is also the project handoff note for Codex, Clawdbot, and any other AI agent. Read this first before scanning the whole folder.
 
-The goal is to first build a reliable **Phase 1 MVP** with a clean parking workflow, then move on to smarter analysis in later phases.
+## Current Direction
 
----
+Phase 1 should be boringly reliable before Phase 2 starts.
 
-## Project Goal
-
-Build a mobile app that helps users:
-
-- start a parking session
-- save the parking location
-- track the remaining parking time
-- receive reminders before and at parking expiry
-- end the session manually
-- review past parking sessions in both **list** and **map** views
-
-This app is **local-only** for now. There is:
+The app is intentionally local-only:
 
 - no backend
 - no login
 - no cloud sync
-- no machine learning yet
+- no analytics
+- no machine learning
+- no continuous background location tracking
+
+Current UX decision: History is map-only. The old History list was removed because it was not useful enough. The better flow is:
+
+1. Open History.
+2. Search an address or nearby landmark.
+3. The map relocates to that address.
+4. Saved parking history near that searched area appears as markers.
+5. Tap a marker to inspect recent sessions and navigation actions.
+
+## Repo Layout
+
+- `SmartParkingReminder/SmartParkingReminder.xcodeproj` - Xcode project.
+- `SmartParkingReminder/SmartParkingReminder/` - app source.
+- `SmartParkingReminder/SmartParkingReminderTests/` - unit tests.
+- `SmartParkingReminder/SmartParkingReminderUITests/` - UI tests.
+- `PHASE1_SELF_TEST.md` - Clawdbot self-test runbook and reporting instructions.
+- `Self_report/` - self-test report output folders.
+- `scripts/generate_phase1_report.py` - dependency-free report generator.
+- `scripts/generate_phase1_report.mjs` - Node wrapper that calls the Python generator.
+
+## Main App Pieces
+
+- `ParkingSessionStore` is the single source of truth for sessions, active session state, countdown time, persistence, and notification scheduling/canceling.
+- `ParkingSessionStorageService` persists sessions as local JSON.
+- `ParkingNotificationService` schedules local notifications at T-15 minutes and expiry.
+- `LocationService` captures location once when starting a session.
+- `HistoryMapView` is the only History UI now.
+- `HistoryMapViewModel` groups saved sessions, performs address search with `MKLocalSearch`, filters nearby history within 1 km, and drives selected marker state.
+- `ParkingSpotGroupingService` groups nearby sessions into a single marker using a simple 30 m threshold.
+- `ParkingSpotDetailSheetView` shows grouped spot details, recent sessions, notes, counts, lat/lon, and Apple/Google Maps actions.
+- `MapHandoffService` opens Apple Maps or Google Maps URLs. It still has Swift 6 sendability warnings but builds.
+
+## Phase 1 Feature Status
+
+Implemented:
+
+- Start parking session with location name, duration, optional note, and optional lat/lon.
+- Home active-session card with countdown.
+- Manual end parking flow.
+- Local JSON persistence.
+- Restore active/completed sessions after relaunch.
+- Notification request scheduling and cancellation logic.
+- History map with grouped saved spots.
+- Address search in History map.
+- Nearby-history filtering around searched address.
+- Marker detail sheet with recent sessions and navigation buttons.
+- UI-test mode that avoids permission prompts using deterministic location and noop notification center.
 
----
+Removed:
 
-## Tech Stack
+- History list mode.
+- `SessionRowView.swift`.
+- History list accessibility/test hooks.
 
-- **Swift**
-- **SwiftUI**
-- **MVVM architecture**
-- **MapKit** for map display
-- **Core Location** for current location capture
-- **UserNotifications** for local reminders
-- local persistence only
+Manual verification still needed:
 
----
+- Real device or simulator notification delivery.
+- Location permission prompt behavior on device.
+- Visual map behavior with real GPS coordinates.
+- Apple Maps and Google Maps handoff on device.
 
-## Development Strategy
+## Recent Work Log
 
-We are using **Codex / ClawDBot as a coding assistant** to help scaffold and build the app incrementally.
+2026-04-24:
 
-The project should be built in small steps rather than one giant prompt.
+- Reviewed latest self-test report at `Self_report/20260424_093917_phase1_report`.
+- Found prior automated failure was only TC-07/TC-08 UI test querying the old History list as a table.
+- Fixed earlier UI-test storage isolation with `UITEST_STORAGE_FILE`.
+- Fixed app launch reload behavior so `ParkingSessionStore.start()` does not clobber in-memory UI state after saving.
+- Added accessibility IDs for Home active/no-active states and map/detail-sheet test hooks.
+- Fixed `ParkingNotificationService` async adapter recursion.
+- Rewrote `PHASE1_SELF_TEST.md` as a Clawdbot runbook with required Markdown, Excel, JSON, log, and `.xcresult` outputs.
+- Added dependency-free Phase 1 report generation through `scripts/generate_phase1_report.py`.
+- Changed History design from List/Map segmented mode to map-only.
+- Added address search and nearby saved-history filtering to the History map.
+- Updated UI tests so TC-07/TC-08 validates the History map detail sheet, not the removed list.
+- Updated the self-test runbook to describe the new map-only History requirement.
 
-General rule:
+## Testing
 
-- Phase 1 = core workflow works reliably
-- Phase 2 = make it smarter and more useful
-- Phase 3 = add ML prediction
+Preferred Clawdbot full self-test command is documented in `PHASE1_SELF_TEST.md`.
 
----
+For quick build verification:
 
-## Phase 1 Scope
+```bash
+xcodebuild build-for-testing \
+  -project SmartParkingReminder/SmartParkingReminder.xcodeproj \
+  -scheme SmartParkingReminder \
+  -destination 'generic/platform=iOS Simulator' \
+  -derivedDataPath /tmp/SmartParkingReminderBuild
+```
 
-Phase 1 is focused on building a **working MVP**.
+Known local limitation for Codex in this environment: full simulator `xcodebuild test` may fail because CoreSimulatorService access is restricted. Clawdbot should run the real self-test and save logs/reports.
 
-### Core features
+Latest build-for-testing result after the History map/search change:
 
-1. Start a parking session
-2. Save:
-   - location name
-   - optional latitude / longitude
-   - start time
-   - expected parking duration
-   - note
-3. Show active parking session on the home screen
-4. Show a remaining time countdown
-5. Schedule local notifications:
-   - 15 minutes before expiry
-   - at expiry
-6. End a parking session manually
-7. Save completed sessions into parking history
-8. Show history in:
-   - list view
-   - map view
+- `** TEST BUILD SUCCEEDED **`
+- Remaining warnings are in `MapHandoffService.swift` about Swift 6 sendability/main-actor isolation.
 
----
+## Phase 1 Self-Test Deliverables
 
-## Map Support
+Clawdbot should save each run under a timestamped folder and include:
 
-We decided that map support belongs in **Phase 1**.
+- `PHASE1_TEST_REPORT.md` - conclusion report with reasons for failures.
+- `PHASE1_TEST_REPORT.xlsx` - Excel overview of all test cases.
+- `PHASE1_TEST_REPORT_DATA.json` - structured source data for the report.
+- `xcodebuild_<timestamp>.log` - full test log.
+- `Phase1Tests_<timestamp>.xcresult` - Xcode result bundle.
+- manual screenshots/logs where required.
 
-### Why
+Important current test mapping:
 
-Parking is naturally location-based, so the app should not only store time-related information, but also make it easy to remember and revisit parking spots visually.
+- TC-07/TC-08 UI test: `Phase1UITests.test_TC07_TC08_EndSession_AppearsInHistoryMapDetail`
+- TC-11/TC-12 UI test: `Phase1UITests.test_TC11_TC12_MapDetailSheet_ShowsSpotInfoAndActions`
+- TC-14 UI test: `Phase1UITests.test_TC14_Relaunch_RestoresActiveSession`
 
-### Phase 1 map behavior
+## Agent Notes
 
-- when a user starts a parking session, the app should request the **current location once**
-- the app saves the coordinate with the parking session
-- the active parking session can be shown on a map
-- parking history can be displayed on a map
+- Do not bring the History list back unless the user explicitly changes the product decision.
+- Search should improve the map workflow, not become a separate results list.
+- Keep Phase 1 simple: no advanced clustering, no ML, no backend.
+- Avoid Node spreadsheet dependencies in this iCloud workspace; prior `exceljs`/`jszip` imports hung. Use the Python report generator.
+- Be careful with the dirty worktree. There are existing generated/user changes and report folders. Do not revert unrelated files.
+- Prefer `build-for-testing` locally; ask Clawdbot to run full simulator tests.
 
-### Important constraint
+## Next Good Improvements
 
-We only want a **one-time current location request** when starting a parking session.
+- Add a focused unit test for `HistoryMapViewModel` search filtering if MapKit search can be injected/mocked cleanly.
+- Improve `MapHandoffService` protocol isolation to remove Swift 6 warnings.
+- Add small visual polish to the History map search overlay after Clawdbot confirms functional tests.
+- Add screenshots to the self-test evidence for map-only History behavior.
 
-We do **not** want continuous background tracking in Phase 1.
+## Phase 2 Parking Lot
 
----
+Only after Phase 1 is stable:
 
-## History Map Design
-
-We discussed that raw session pins may create a poor user experience if the user parks in the same place multiple times.
-
-### Decision
-
-The history map should **not** show duplicate pins for the same or nearly same spot.
-
-Instead, it should:
-
-- group nearby parking sessions into one map marker
-- show one marker per grouped parking spot
-- let the user inspect the sessions attached to that spot
-
-This keeps the map clean and readable.
-
-### Phase 1 rule
-
-Use a **simple grouping rule** for nearby coordinates.
-
-### Deferred to Phase 2
-
-Do not add advanced map intelligence yet, such as:
-
-- clustering
-- heatmaps
-- complex filtering
-- favorite spot ranking
-- advanced GPS drift correction
-
----
-
-## Navigation to a Saved Parking Spot
-
-We discussed whether navigation should be part of Phase 1.
-
-### Decision
-
-Basic navigation handoff belongs in **Phase 1**.
-
-### What this means
-
-The app does **not** build navigation itself.
-
-Instead, from a saved parking spot, the user should be able to:
-
-- open the destination in **Apple Maps**
-- optionally open it in **Google Maps**
-
-This is a handoff flow only.
-
----
-
-## Correct Marker Interaction Flow
-
-We refined the marker interaction design after noticing that direct navigation from the pin was not the right UX.
-
-### Final interaction flow
-
-When the user taps a history marker:
-
-1. select the marker
-2. show a **detail sheet / bottom sheet**
-3. display parking spot details
-4. allow the user to choose navigation from there
-
-### Important UX rule
-
-- **tap pin = show details**
-- **tap button in detail sheet = navigate**
-
-Navigation should **not** happen immediately when tapping the map pin.
-
----
-
-## Detail Sheet Requirements
-
-When a grouped parking spot is selected, the detail sheet should show:
-
-- parking spot name
-- latitude / longitude
-- recent parking sessions at this spot
-- note/comments from those sessions
-- status summary
-- count of total sessions at this spot
-
-### Actions inside the detail sheet
-
-- Open in Apple Maps
-- Open in Google Maps
-
-This sheet is the main interaction point for history markers.
-
----
-
-## Proposed Main Screens
-
-### 1. Home Screen
-- active parking session
-- remaining time countdown
-- start parking button
-- end parking button
-- optional small map preview
-
-### 2. New Session Screen
-- location name input
-- duration picker
-- optional note
-- optional current location capture
-- save/start button
-
-### 3. History Screen
-- list view
-- map view with grouped parking markers
-
-### 4. Parking Spot Detail Sheet
-- grouped spot information
-- recent sessions
-- note history
-- navigation actions
-
----
-
-## Data Model Direction
-
-### ParkingSession
-Represents one actual parking event.
-
-Suggested fields:
-
-- id
-- locationName
-- latitude
-- longitude
-- startTime
-- expectedEndTime
-- actualEndTime
-- note
-- status
-
-### ParkingSpotGroup
-Represents one grouped location on the history map.
-
-Used to:
-
-- avoid duplicate pins
-- group repeated parking events at the same place
-- show a cleaner history map
-
----
-
-## Phase 1 Self-Test
-
-A complete manual self-test checklist for all Phase 1 features is available at:
-
-- `PHASE1_SELF_TEST.md`
-
-## When to Move to Phase 2
-
-We agreed that we should only move to Phase 2 when Phase 1 is **boringly reliable**.
-
-### Phase 1 completion checklist
-
-We should not move on until the app can reliably do all of the following:
-
-1. User starts a parking session
-2. App gets current location and saves it
-3. Countdown shows correctly
-4. Reminder fires correctly
-5. User can end the session
-6. Session appears in history
-7. App restart does not lose the active session
-
-### Additional readiness signs
-
-- core flow works multiple times in a row
-- no major crash or blocking bug
-- notifications behave as expected
-- map pins display correctly
-- active session state stays in sync
-- some real sample parking history exists
-
-### Why not move early
-
-Phase 2 depends on stable data and a reliable workflow.
-
-If Phase 1 is unstable, any “smart” feature added on top will be weak and misleading.
-
----
-
-## Planned Future Phases
-
-### Phase 2
-Make the app smarter and more useful.
-
-Possible ideas:
-- parking pattern summaries
-- frequent parking spot insights
+- frequent parking spot summaries
 - smarter history visualization
-- risk scoring
+- favorite/recent spots
 - personalized reminder suggestions
-
-### Phase 3
-Add machine learning.
-
-Possible direction:
-- predict whether the user is likely to forget the car at a certain time/place
-- use historical parking patterns to classify risk level
-
----
-
-## Non-Goals for Phase 1
-
-Do **not** add these yet:
-
-- backend APIs
-- user accounts
-- cloud sync
-- analytics
-- machine learning
-- continuous background location tracking
-- advanced clustering or heatmaps
-- in-app turn-by-turn navigation
-
----
-
-## Build Philosophy
-
-This project should stay focused.
-
-Phase 1 should solve one simple problem well:
-
-> Help the user remember where they parked and remind them before parking expires.
-
-Everything else should support that goal, not distract from it.
+- risk scoring
+- ML prediction of forgetfulness risk

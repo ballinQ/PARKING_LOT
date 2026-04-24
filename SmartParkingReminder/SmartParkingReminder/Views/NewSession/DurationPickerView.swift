@@ -9,6 +9,7 @@ struct DurationPickerView: View {
                 Text(label(for: m)).tag(m)
             }
         }
+        .accessibilityIdentifier(A11y.newSessionDurationPicker)
         .pickerStyle(.menu)
     }
 

@@ -7,19 +7,26 @@ final class ParkingSessionStore: ObservableObject {
 
     private let storage: ParkingSessionStorageServiceProtocol
     private let notifications: ParkingNotificationServiceProtocol
+    private let nowProvider: () -> Date
 
     private var timer: Timer?
+    private var hasLoadedFromDisk = false
 
     init(
         storage: ParkingSessionStorageServiceProtocol = ParkingSessionStorageService(),
-        notifications: ParkingNotificationServiceProtocol = ParkingNotificationService()
+        notifications: ParkingNotificationServiceProtocol = ParkingNotificationService(),
+        nowProvider: @escaping () -> Date = { Date() }
     ) {
         self.storage = storage
         self.notifications = notifications
+        self.nowProvider = nowProvider
     }
 
     func start() {
-        loadFromDisk()
+        if !hasLoadedFromDisk {
+            loadFromDisk()
+            hasLoadedFromDisk = true
+        }
         startClock()
     }
 
@@ -38,7 +45,7 @@ final class ParkingSessionStore: ObservableObject {
             await endSession(id: active.id)
         }
 
-        let start = Date()
+        let start = nowProvider()
         let expectedEnd = start.addingTimeInterval(duration)
 
         let new = ParkingSession(
@@ -66,7 +73,7 @@ final class ParkingSessionStore: ObservableObject {
     func endSession(id: UUID) async {
         guard let idx = sessions.firstIndex(where: { $0.id == id }) else { return }
         var s = sessions[idx]
-        s.actualEndTime = Date()
+        s.actualEndTime = nowProvider()
         s.persistedStatus = .completed
         sessions[idx] = s
 
@@ -100,7 +107,7 @@ final class ParkingSessionStore: ObservableObject {
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                self?.now = Date()
+                self?.now = self?.nowProvider() ?? Date()
             }
         }
     }

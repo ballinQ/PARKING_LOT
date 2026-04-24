@@ -9,7 +9,7 @@ Local-only MVP to record a parking session, show a countdown, and schedule remin
   - 15 minutes before expiry
   - at expiry
 - End session manually
-- History list with status: Active / Overdue / Completed
+- History map with address search, nearby saved spots, and spot details
 - Restores sessions (including active) from disk on app launch
 
 ## Tech
@@ -24,7 +24,7 @@ Local-only MVP to record a parking session, show a countdown, and schedule remin
 1. Run XcodeGen to generate the Xcode project:
 
 ```bash
-cd "/Users/bolinqu/Library/Mobile Documents/com~apple~CloudDocs/MacMini/小六/01-Projects/Parking alarm/SmartParkingReminder"
+cd "/Users/bolinqu/Library/Mobile Documents/com~apple~CloudDocs/MacMini/小六/01-Projects/Parking alarm/PARKING_LOT/SmartParkingReminder"
 xcodegen generate
 ```
 
@@ -34,7 +34,11 @@ xcodegen generate
 
 ## Permissions
 - Notifications are requested when starting a session (scheduling notifications).
-- Location permission is requested when tapping “Use Current Location”.
+- Location permission is requested once when starting a session.
+
+## Agent handoff
+- Read the root `../README.md` first for current product direction, recent work log, known test limits, and Clawdbot report expectations.
+- History is map-only now. Do not reintroduce the removed list flow unless the product direction changes.
 
 ## Quick test
 1. Home → **Start Parking**
@@ -43,7 +47,7 @@ xcodegen generate
 4. Tap **Start**
 5. Verify countdown on Home
 6. Tap **End Parking**
-7. History tab shows Completed
+7. History tab shows the saved spot on the map
 
 ## Testing notifications quickly
 - Start a session with **16 minutes** duration.

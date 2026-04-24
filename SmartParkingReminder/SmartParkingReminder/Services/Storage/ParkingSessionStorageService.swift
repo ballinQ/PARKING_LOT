@@ -13,6 +13,11 @@ final class ParkingSessionStorageService: ParkingSessionStorageServiceProtocol {
         self.fileURL = documents.appendingPathComponent(filename)
     }
 
+    /// Test-friendly initializer.
+    init(fileURL: URL) {
+        self.fileURL = fileURL
+    }
+
     func load() throws -> [ParkingSession] {
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             return []

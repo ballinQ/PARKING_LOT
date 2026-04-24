@@ -4,7 +4,7 @@ struct NewSessionView: View {
     @EnvironmentObject var store: ParkingSessionStore
     @Environment(\.dismiss) private var dismiss
 
-    let locationService: LocationService
+    let locationService: LocationServiceProtocol
 
     @State private var locationName: String = ""
     @State private var note: String = ""
@@ -22,6 +22,7 @@ struct NewSessionView: View {
                 Section("Location") {
                     TextField("e.g. Green P Lot", text: $locationName)
                         .textInputAutocapitalization(.words)
+                        .accessibilityIdentifier(A11y.newSessionLocationField)
                 }
 
                 Section("Duration") {
@@ -34,6 +35,7 @@ struct NewSessionView: View {
                 Section("Note (optional)") {
                     TextField("Add a note", text: $note, axis: .vertical)
                         .lineLimit(3...6)
+                        .accessibilityIdentifier(A11y.newSessionNoteField)
                 }
 
                 Section("Location (auto)") {
@@ -46,6 +48,7 @@ struct NewSessionView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .accessibilityIdentifier(A11y.newSessionCancelButton)
                         .disabled(isStarting)
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -61,6 +64,7 @@ struct NewSessionView: View {
                             Text("Start")
                         }
                     }
+                    .accessibilityIdentifier(A11y.newSessionStartButton)
                     .disabled(!canSave || isStarting)
                 }
             }

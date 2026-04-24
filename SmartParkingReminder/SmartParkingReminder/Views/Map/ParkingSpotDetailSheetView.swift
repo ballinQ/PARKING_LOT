@@ -11,14 +11,17 @@ struct ParkingSpotDetailSheetView: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(group.name)
+                    .accessibilityIdentifier(A11y.detailSpotName)
                     .font(.title3)
                     .fontWeight(.semibold)
 
                 Text("\(group.count) session\(group.count == 1 ? "" : "s")")
+                    .accessibilityIdentifier(A11y.detailSpotCount)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
 
                 Text("Lat/Lon: \(group.coordinate.latitude, specifier: "%.5f"), \(group.coordinate.longitude, specifier: "%.5f")")
+                    .accessibilityIdentifier(A11y.detailSpotLatLon)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -61,17 +64,21 @@ struct ParkingSpotDetailSheetView: View {
                 Button("Open in Apple Maps") {
                     onOpenAppleMaps()
                 }
+                .accessibilityIdentifier(A11y.detailOpenAppleMaps)
                 .buttonStyle(.borderedProminent)
 
                 Button("Open in Google Maps") {
                     onOpenGoogleMaps()
                 }
+                .accessibilityIdentifier(A11y.detailOpenGoogleMaps)
                 .buttonStyle(.bordered)
 
                 Spacer()
             }
         }
         .padding()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(A11y.detailSheet)
         .presentationDragIndicator(.visible)
     }
 }
