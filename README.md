@@ -32,6 +32,8 @@ Current UX decision: History is map-only. The old History list was removed becau
 - `SmartParkingReminder/SmartParkingReminderTests/` - unit tests.
 - `SmartParkingReminder/SmartParkingReminderUITests/` - UI tests.
 - `PHASE1_SELF_TEST.md` - Clawdbot self-test runbook and reporting instructions.
+- `PHASE2_ROADMAP.md` - Phase 2 product roadmap and implementation order.
+- `PHASE2_ARCHITECTURE_REVIEW.md` - Phase 2 architecture risks, sequencing, and preparation notes.
 - `Self_report/` - self-test report output folders.
 - `scripts/generate_phase1_report.py` - dependency-free report generator.
 - `scripts/generate_phase1_report.mjs` - Node wrapper that calls the Python generator.
@@ -104,6 +106,21 @@ Manual verification still needed:
 - Automated result: 13 Xcode tests passed, 0 failed (`** TEST SUCCEEDED **`).
 - Manual-only/manual-confirmation checks remain recorded in the report as `NOT RUN` where device permissions, notification delivery, visual map search, or external map handoff need human evidence.
 
+2026-04-28:
+
+- Created `PHASE2_ROADMAP.md` and `PHASE2_ARCHITECTURE_REVIEW.md` as planning-only documents before Phase 2 implementation.
+- Confirmed Phase 2 direction: assistant upgrade, not platform expansion.
+- Froze Phase 1 scope for Phase 2 planning: local-only, no backend, no login, no cloud sync, no analytics, no ML, no continuous background location, and no old History list.
+- Decided Phase 2 should start with foundation work before user-facing feature expansion.
+- First implementation target is Phase 2A foundation:
+  - persistence schema versioning and migration safety
+  - pure active-session display/status formatter
+  - notification lifecycle audit for start/end/replacement/relaunch
+  - Swift 6 warning cleanup around map handoff
+- First user-visible Phase 2 feature should be improved active-session UI, especially expiring and expired states.
+- First platform spike should be Live Activity / Dynamic Island after the display model and lifecycle rules are stable.
+- Quick Start, personal spot metadata, richer map filtering, and nearby parking discovery research are intentionally later Phase 2 slices.
+
 ## Testing
 
 Preferred Clawdbot full self-test command is documented in `PHASE1_SELF_TEST.md`.
@@ -145,6 +162,7 @@ Important current test mapping:
 
 ## Agent Notes
 
+- Always update this README work log after meaningful project changes so future agents can orient here first.
 - Do not bring the History list back unless the user explicitly changes the product decision.
 - Search should improve the map workflow, not become a separate results list.
 - Keep Phase 1 simple: no advanced clustering, no ML, no backend.
@@ -154,18 +172,25 @@ Important current test mapping:
 
 ## Next Good Improvements
 
-- Add a focused unit test for `HistoryMapViewModel` search filtering if MapKit search can be injected/mocked cleanly.
+- Tag/freeze the Phase 1 baseline before Phase 2 code work.
+- Start Phase 2A with persistence schema versioning and migration safety.
+- Extract active-session display/status formatting into pure tested logic.
+- Audit notification lifecycle around app relaunch and ended/replaced sessions.
 - Improve `MapHandoffService` protocol isolation to remove Swift 6 warnings.
-- Add small visual polish to the Map search overlay after Clawdbot confirms functional tests.
-- Add screenshots to the self-test evidence for map-only History behavior.
 
-## Phase 2 Parking Lot
+## Phase 2 Direction
 
-Only after Phase 1 is stable:
+Phase 2 implementation order is now defined in `PHASE2_ROADMAP.md` and `PHASE2_ARCHITECTURE_REVIEW.md`.
 
-- frequent parking spot summaries
-- smarter history visualization
-- favorite/recent spots
-- personalized reminder suggestions
-- risk scoring
-- ML prediction of forgetfulness risk
+Recommended order:
+
+1. Persistence schema versioning and migration safety.
+2. Pure active-session display/status formatter with tests.
+3. Notification lifecycle audit.
+4. Swift 6 warning cleanup.
+5. Improved active/expiring/expired session UI.
+6. Live Activity / Dynamic Island technical spike.
+7. Quick Start on the same session creation path.
+8. Map-only search/filtering improvements.
+9. Personal spot metadata after storage versioning is stable.
+10. Nearby parking discovery research only.
