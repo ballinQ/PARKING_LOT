@@ -9,7 +9,7 @@ Local-only MVP to record a parking session, show a countdown, and schedule remin
   - 15 minutes before expiry
   - at expiry
 - End session manually
-- History map with address search, nearby saved spots, and spot details
+- Map with address search, nearby saved spots, and spot details
 - Restores sessions (including active) from disk on app launch
 
 ## Tech
@@ -47,7 +47,7 @@ xcodegen generate
 4. Tap **Start**
 5. Verify countdown on Home
 6. Tap **End Parking**
-7. History tab shows the saved spot on the map
+7. Map tab shows the saved spot on the map
 
 ## Testing notifications quickly
 - Start a session with **16 minutes** duration.

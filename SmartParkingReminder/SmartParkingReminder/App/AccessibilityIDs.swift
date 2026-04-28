@@ -25,6 +25,7 @@ enum A11y {
     static let historySearchButton = "history.searchButton"
     static let historyClearSearchButton = "history.clearSearchButton"
     static let historySearchStatus = "history.searchStatus"
+    static let historyPersonalSpotButton = "history.personalSpotButton"
 
     // Detail Sheet
     static let detailSheet = "spotDetail.sheet"

@@ -19,7 +19,7 @@ The app is intentionally local-only:
 
 Current UX decision: History is map-only. The old History list was removed because it was not useful enough. The better flow is:
 
-1. Open History.
+1. Open Map.
 2. Search an address or nearby landmark.
 3. The map relocates to that address.
 4. Saved parking history near that searched area appears as markers.
@@ -58,8 +58,8 @@ Implemented:
 - Local JSON persistence.
 - Restore active/completed sessions after relaunch.
 - Notification request scheduling and cancellation logic.
-- History map with grouped saved spots.
-- Address search in History map.
+- Map with grouped saved spots.
+- Address search in Map.
 - Nearby-history filtering around searched address.
 - Marker detail sheet with recent sessions and navigation buttons.
 - UI-test mode that avoids permission prompts using deterministic location and noop notification center.
@@ -90,9 +90,19 @@ Manual verification still needed:
 - Rewrote `PHASE1_SELF_TEST.md` as a Clawdbot runbook with required Markdown, Excel, JSON, log, and `.xcresult` outputs.
 - Added dependency-free Phase 1 report generation through `scripts/generate_phase1_report.py`.
 - Changed History design from List/Map segmented mode to map-only.
-- Added address search and nearby saved-history filtering to the History map.
-- Updated UI tests so TC-07/TC-08 validates the History map detail sheet, not the removed list.
+- Added address search and nearby saved-history filtering to the Map.
+- Updated UI tests so TC-07/TC-08 validates the Map detail sheet, not the removed list.
 - Updated the self-test runbook to describe the new map-only History requirement.
+
+2026-04-27:
+
+- Renamed the user-facing History tab/title to `Map`.
+- Added the collapsible `Personal History` side panel on the Map view.
+- Fixed the Map detail UI test path to open saved spot details from the visible personal-history panel instead of the hidden SwiftUI Map test hook.
+- Ran full Phase 1 automated self-test on iPhone 17 / iOS 26.2 Simulator.
+- Latest managed report: `Self_report/20260427_162344_phase1_report`.
+- Automated result: 13 Xcode tests passed, 0 failed (`** TEST SUCCEEDED **`).
+- Manual-only/manual-confirmation checks remain recorded in the report as `NOT RUN` where device permissions, notification delivery, visual map search, or external map handoff need human evidence.
 
 ## Testing
 
@@ -108,11 +118,12 @@ xcodebuild build-for-testing \
   -derivedDataPath /tmp/SmartParkingReminderBuild
 ```
 
-Known local limitation for Codex in this environment: full simulator `xcodebuild test` may fail because CoreSimulatorService access is restricted. Clawdbot should run the real self-test and save logs/reports.
+Latest full automated self-test result:
 
-Latest build-for-testing result after the History map/search change:
-
-- `** TEST BUILD SUCCEEDED **`
+- Report folder: `Self_report/20260427_162344_phase1_report`
+- `** TEST SUCCEEDED **`
+- Unit tests: 9 passed, 0 failed.
+- UI tests: 4 passed, 0 failed.
 - Remaining warnings are in `MapHandoffService.swift` about Swift 6 sendability/main-actor isolation.
 
 ## Phase 1 Self-Test Deliverables
@@ -145,7 +156,7 @@ Important current test mapping:
 
 - Add a focused unit test for `HistoryMapViewModel` search filtering if MapKit search can be injected/mocked cleanly.
 - Improve `MapHandoffService` protocol isolation to remove Swift 6 warnings.
-- Add small visual polish to the History map search overlay after Clawdbot confirms functional tests.
+- Add small visual polish to the Map search overlay after Clawdbot confirms functional tests.
 - Add screenshots to the self-test evidence for map-only History behavior.
 
 ## Phase 2 Parking Lot

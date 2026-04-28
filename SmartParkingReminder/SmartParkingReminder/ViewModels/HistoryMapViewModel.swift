@@ -14,16 +14,22 @@ final class HistoryMapViewModel: ObservableObject {
     /// Selected marker id from the Map selection binding.
     @Published var selectedGroupID: ParkingSpotGroup.ID? = nil {
         didSet {
-            if let id = selectedGroupID {
-                selectedGroup = visibleGroups.first(where: { $0.id == id })
-            } else {
-                selectedGroup = nil
-            }
+            guard let id = selectedGroupID,
+                  let group = visibleGroups.first(where: { $0.id == id })
+            else { return }
+
+            selectedGroup = group
         }
     }
 
     /// Drives the detail sheet.
-    @Published var selectedGroup: ParkingSpotGroup? = nil
+    @Published var selectedGroup: ParkingSpotGroup? = nil {
+        didSet {
+            if selectedGroup == nil, selectedGroupID != nil {
+                selectedGroupID = nil
+            }
+        }
+    }
 
     private let groupingService: ParkingSpotGroupingService
     private let searchRadiusMeters: CLLocationDistance
@@ -44,8 +50,27 @@ final class HistoryMapViewModel: ObservableObject {
         applySearchFilter()
 
         if let currentID {
-            selectedGroupID = visibleGroups.contains(where: { $0.id == currentID }) ? currentID : nil
+            if let group = visibleGroups.first(where: { $0.id == currentID }) {
+                selectGroup(group)
+            } else {
+                clearSelection()
+            }
         }
+    }
+
+    func selectGroup(_ group: ParkingSpotGroup) {
+        selectedGroupID = group.id
+        selectedGroup = group
+    }
+
+    func selectFirstVisibleGroup() {
+        guard let group = visibleGroups.first else { return }
+        selectGroup(group)
+    }
+
+    func clearSelection() {
+        selectedGroup = nil
+        selectedGroupID = nil
     }
 
     func defaultCameraPosition() -> MapCameraPosition {
@@ -90,7 +115,7 @@ final class HistoryMapViewModel: ObservableObject {
             let coordinate = item.placemark.coordinate
             searchCenter = coordinate
             applySearchFilter(searchName: item.name ?? query)
-            selectedGroupID = nil
+            clearSelection()
             return coordinate
         } catch {
             statusText = "Could not search that address. Check the spelling or try a nearby landmark."
@@ -103,7 +128,7 @@ final class HistoryMapViewModel: ObservableObject {
         searchCenter = nil
         statusText = nil
         visibleGroups = groups
-        selectedGroupID = nil
+        clearSelection()
     }
 
     private func applySearchFilter(searchName: String? = nil) {

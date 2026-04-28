@@ -43,15 +43,13 @@ final class Phase1UITests: XCTestCase {
         let noActive = app.otherElements.matching(identifier: "home.noActiveSession").firstMatch
         XCTAssertTrue(noActive.waitForExistence(timeout: 5))
 
-        // Go to History tab
-        app.tabBars.buttons["History"].tap()
+        // Go to Map tab
+        app.tabBars.buttons["Map"].tap()
 
         let map = app.otherElements.matching(identifier: "history.map").firstMatch
         XCTAssertTrue(map.waitForExistence(timeout: 5))
 
-        let openFirst = app.buttons.matching(identifier: "uitest.openFirstSpotDetail").firstMatch
-        XCTAssertTrue(openFirst.waitForExistence(timeout: 5))
-        openFirst.tap()
+        openFirstSpotFromPersonalHistory()
 
         let sheet = app.otherElements.matching(identifier: "spotDetail.sheet").firstMatch
         XCTAssertTrue(sheet.waitForExistence(timeout: 5))
@@ -67,12 +65,10 @@ final class Phase1UITests: XCTestCase {
         startSession(location: "GPS Spot", note: "")
         app.buttons.matching(identifier: "home.endParking").firstMatch.tap()
 
-        app.tabBars.buttons["History"].tap()
+        app.tabBars.buttons["Map"].tap()
 
-        // Use deterministic hook to open detail sheet
-        let openFirst = app.buttons.matching(identifier: "uitest.openFirstSpotDetail").firstMatch
-        XCTAssertTrue(openFirst.waitForExistence(timeout: 5))
-        openFirst.tap()
+        // Use the visible personal history side panel to open detail sheet.
+        openFirstSpotFromPersonalHistory()
 
         let sheet = app.otherElements.matching(identifier: "spotDetail.sheet").firstMatch
         XCTAssertTrue(sheet.waitForExistence(timeout: 5))
@@ -127,5 +123,11 @@ final class Phase1UITests: XCTestCase {
 
         let activeCard = app.otherElements.matching(identifier: "home.activeSessionCard").firstMatch
         XCTAssertTrue(activeCard.waitForExistence(timeout: 5))
+    }
+
+    private func openFirstSpotFromPersonalHistory() {
+        let spotButton = app.buttons.matching(identifier: "history.personalSpotButton").firstMatch
+        XCTAssertTrue(spotButton.waitForExistence(timeout: 5))
+        spotButton.tap()
     }
 }

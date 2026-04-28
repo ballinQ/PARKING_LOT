@@ -42,7 +42,7 @@ This runbook covers all Phase 1 requirements:
 | F5 | Notifications at T-15 and expiry | P0 | TC-05, TC-06 | Unit automated + manual OS delivery |
 | F6 | End session manually | P0 | TC-07 | UI + unit automated |
 | F7 | Completed sessions saved to history | P0 | TC-07, TC-08, TC-14 | UI + unit automated |
-| F8 | History map with address search | P0 | TC-08, TC-09 | UI automated + manual visual |
+| F8 | Map with address search | P0 | TC-08, TC-09 | UI automated + manual visual |
 | F9 | One-shot current location capture, no continuous tracking | P1 | TC-02, TC-03 | Manual device check |
 | F10 | Nearby sessions grouped into one marker | P1 | TC-10 | Unit automated + manual visual |
 | F11 | Tap marker opens detail sheet, no auto-navigation | P1 | TC-11 | UI automated |
@@ -155,7 +155,7 @@ Steps:
 3. Start a new session with location name `GPS Spot`.
 4. Allow location permission when prompted.
 5. Save/start the session.
-6. Open the active session card and history/map after ending it.
+6. Open the active session card and Map after ending it.
 
 Expected:
 
@@ -266,10 +266,10 @@ Expected:
 
 - Active session disappears from Home.
 - No-active state appears.
-- Completed session is saved and appears in the History map detail sheet.
+- Completed session is saved and appears in the Map detail sheet.
 - Pending notifications for that session are canceled.
 
-### TC-08 (P0) History Map Detail Integrity
+### TC-08 (P0) Map Detail Integrity
 
 Coverage:
 
@@ -280,17 +280,17 @@ Manual steps:
 
 1. Create at least three completed sessions.
 2. Include one note: `pillar B`.
-3. Open History.
+3. Open Map.
 4. Tap a saved parking marker and open its detail sheet.
 
 Expected:
 
-- History shows the map only; there is no separate list mode.
+- Map tab shows the map only; there is no separate list mode.
 - Saved parking spots appear as map markers.
 - The marker detail sheet shows location names, notes, times, and statuses correctly.
 - Recent sessions in a spot are understandable and stable.
 
-### TC-09 (P0) History Map Rendering
+### TC-09 (P0) Map Rendering
 
 Coverage:
 
@@ -300,7 +300,7 @@ Coverage:
 Steps:
 
 1. Create at least two completed sessions with coordinates.
-2. Open History.
+2. Open Map.
 
 Expected:
 
@@ -324,7 +324,7 @@ Coverage:
 Manual visual confirmation:
 
 1. Create repeated sessions at the same/nearby spot.
-2. Open History Map.
+2. Open Map.
 
 Expected:
 
@@ -340,7 +340,7 @@ Coverage:
 
 Manual steps:
 
-1. Open History Map with at least one marker.
+1. Open Map with at least one marker.
 2. Tap the marker.
 
 Expected:

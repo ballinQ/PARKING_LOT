@@ -7,7 +7,7 @@ struct HistoryView: View {
         NavigationStack {
             HistoryMapView(sessions: store.sessions, now: store.now)
                 .ignoresSafeArea(edges: .bottom)
-                .navigationTitle("History")
+                .navigationTitle("Map")
                 .navigationBarTitleDisplayMode(.inline)
         }
     }
