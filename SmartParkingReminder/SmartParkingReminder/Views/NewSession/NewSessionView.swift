@@ -77,17 +77,16 @@ struct NewSessionView: View {
 
         let trimmedName = locationName.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        let duration = TimeInterval(durationMinutes * 60)
 
         let coordinate = await locationService.currentCoordinateOnce()
         let coordTuple = coordinate.map { (lat: $0.latitude, lon: $0.longitude) }
 
-        await store.startNewSession(
+        await store.startNewSession(from: .fullForm(
             locationName: trimmedName,
-            duration: duration,
+            durationMinutes: durationMinutes,
             note: trimmedNote,
             coordinate: coordTuple
-        )
+        ))
 
         dismiss()
     }

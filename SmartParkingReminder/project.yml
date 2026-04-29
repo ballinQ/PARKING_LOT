@@ -18,6 +18,9 @@ targets:
       - path: SmartParkingReminder
     resources:
       - path: SmartParkingReminder/Resources
+    dependencies:
+      - target: SmartParkingReminderWidgetExtension
+        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.smartparking.SmartParkingReminder
@@ -33,6 +36,19 @@ targets:
       testTargets:
         - SmartParkingReminderTests
         - SmartParkingReminderUITests
+
+  SmartParkingReminderWidgetExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: SmartParkingReminderWidgetExtension
+      - path: SmartParkingReminder/Activity/ParkingReminderActivityAttributes.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.smartparking.SmartParkingReminder.widget
+        INFOPLIST_FILE: SmartParkingReminderWidgetExtension/Info.plist
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
 
   SmartParkingReminderTests:
     type: bundle.unit-test

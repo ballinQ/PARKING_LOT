@@ -4,6 +4,7 @@ struct HomeView: View {
     @EnvironmentObject var store: ParkingSessionStore
 
     @State private var showingNewSession = false
+    @State private var quickStartMinutesInFlight: Int?
 
     let locationService: LocationServiceProtocol
 
@@ -13,7 +14,7 @@ struct HomeView: View {
                 if let active = store.activeSession {
                     ActiveSessionCardView(
                         session: active,
-                        remainingText: store.remainingTimeString(for: active)
+                        timerDisplay: store.timerDisplay(for: active)
                     )
 
                     // Map preview of the active parking location (if available).
@@ -36,6 +37,14 @@ struct HomeView: View {
                     )
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier(A11y.homeNoActiveSessionView)
+
+                    QuickStartParkingView(
+                        locationName: store.suggestedQuickStartLocationName,
+                        inFlightMinutes: quickStartMinutesInFlight,
+                        start: { minutes in
+                            Task { await quickStart(minutes: minutes) }
+                        }
+                    )
                 }
 
                 Spacer()
@@ -55,5 +64,62 @@ struct HomeView: View {
             .padding()
             .navigationTitle("Smart Parking")
         }
+    }
+
+    private func quickStart(minutes: Int) async {
+        guard quickStartMinutesInFlight == nil else { return }
+        quickStartMinutesInFlight = minutes
+        defer { quickStartMinutesInFlight = nil }
+
+        let coordinate = await locationService.currentCoordinateOnce()
+        let coordTuple = coordinate.map { (lat: $0.latitude, lon: $0.longitude) }
+
+        await store.startNewSession(from: .quickStart(
+            locationName: store.suggestedQuickStartLocationName,
+            durationMinutes: minutes,
+            coordinate: coordTuple
+        ))
+    }
+}
+
+private struct QuickStartParkingView: View {
+    let locationName: String
+    let inFlightMinutes: Int?
+    let start: (Int) -> Void
+
+    private let durations = [30, 60, 120]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Quick Start", systemImage: "timer")
+                    .font(.headline)
+                    .accessibilityIdentifier(A11y.homeQuickStartPanel)
+                Spacer()
+                Text(locationName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            HStack(spacing: 10) {
+                ForEach(durations, id: \.self) { minutes in
+                    Button {
+                        start(minutes)
+                    } label: {
+                        Label(durationLabel(for: minutes), systemImage: "play.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(inFlightMinutes != nil)
+                    .accessibilityIdentifier(A11y.homeQuickStartButton(minutes: minutes))
+                }
+            }
+        }
+    }
+
+    private func durationLabel(for minutes: Int) -> String {
+        if minutes < 60 { return "\(minutes)m" }
+        return "\(minutes / 60)h"
     }
 }

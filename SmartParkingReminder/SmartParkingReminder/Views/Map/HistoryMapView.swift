@@ -9,14 +9,20 @@ struct HistoryMapView: View {
     private let mapHandoff = MapHandoffService()
 
     @State private var camera: MapCameraPosition = .automatic
-    @State private var showsPersonalHistory = true
+    @State private var sheetState: MapSheetState = .collapsed
+    @State private var detailReturnState: MapSheetState?
+    @GestureState private var sheetDragOffset: CGFloat = 0
+    @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         GeometryReader { proxy in
-            ZStack {
+            ZStack(alignment: .bottom) {
                 mapContent
-                topSearchOverlay
-                personalHistoryOverlay(maxWidth: min(proxy.size.width * 0.72, 280))
+                    .ignoresSafeArea(edges: .bottom)
+
+                uiTestDetailHook
+
+                bottomSheet(in: proxy)
             }
         }
         .onAppear {
@@ -31,19 +37,23 @@ struct HistoryMapView: View {
                 camera = vm.defaultCameraPosition()
             }
         }
-        // UX rule: marker tap => show details; navigation only from buttons inside the sheet.
-        .sheet(item: $vm.selectedGroup) { group in
-            ParkingSpotDetailSheetView(
-                group: group,
-                now: now,
-                onOpenAppleMaps: {
-                    mapHandoff.openDirections(to: group.coordinate, placeName: group.name, preferred: .appleMaps)
-                },
-                onOpenGoogleMaps: {
-                    mapHandoff.openDirections(to: group.coordinate, placeName: group.name, preferred: .googleMaps)
+        .onChange(of: vm.selectedGroup?.id) { _, newValue in
+            guard newValue != nil, let group = vm.selectedGroup else { return }
+            if detailReturnState == nil {
+                detailReturnState = vm.searchCenter == nil && vm.searchResults.isEmpty ? .collapsed : .expanded
+            }
+            camera = vm.cameraPosition(centeredOn: group.coordinate)
+            withAnimation(.snappy) {
+                sheetState = .expanded
+            }
+        }
+        .onChange(of: isSearchFocused) { _, focused in
+            guard focused else { return }
+            withAnimation(.snappy) {
+                if sheetState == .collapsed {
+                    sheetState = .medium
                 }
-            )
-            .presentationDetents([.medium, .large])
+            }
         }
     }
 
@@ -69,140 +79,294 @@ struct HistoryMapView: View {
             }
             .accessibilityIdentifier(A11y.historyMap)
             .mapStyle(.standard)
+        }
+    }
 
-            // UI tests: SwiftUI Map annotations are not consistently hittable.
-            // Provide a deterministic hook that opens the first spot detail sheet.
-            if ProcessInfo.processInfo.arguments.contains("UI_TESTING") {
-                Button("Open First Spot Detail") {
-                    vm.selectFirstVisibleGroup()
+    @ViewBuilder
+    private var uiTestDetailHook: some View {
+        if ProcessInfo.processInfo.arguments.contains("UI_TESTING") {
+            VStack {
+                HStack {
+                    Button("Open First Spot Detail") {
+                        detailReturnState = .expanded
+                        vm.selectFirstVisibleGroup()
+                        withAnimation(.snappy) {
+                            sheetState = .expanded
+                        }
+                    }
+                    .accessibilityIdentifier(A11y.uiTestOpenFirstSpotDetail)
+                    .frame(width: 180, height: 44)
+                    .foregroundStyle(.clear)
+                    .background(.clear)
+
+                    Spacer()
                 }
-                .accessibilityIdentifier(A11y.uiTestOpenFirstSpotDetail)
-                .opacity(0.01)
+                Spacer()
             }
+            .padding(.top, 52)
+            .padding(.leading, 12)
         }
     }
 
-    private var topSearchOverlay: some View {
-        VStack(spacing: 10) {
-            searchControls
+    private func bottomSheet(in proxy: GeometryProxy) -> some View {
+        let baseHeight = sheetHeight(for: sheetState, in: proxy)
+        let height = min(
+            sheetHeight(for: .expanded, in: proxy),
+            max(sheetHeight(for: .collapsed, in: proxy), baseHeight - sheetDragOffset)
+        )
 
-            if let statusText = vm.statusText {
-                Text(statusText)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(.regularMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .accessibilityIdentifier(A11y.historySearchStatus)
+        return VStack(spacing: 0) {
+            dragHandle
+                .padding(.top, 8)
+                .padding(.bottom, 6)
+
+            VStack(spacing: 12) {
+                searchControls
+
+                if sheetState != .collapsed {
+                    sheetBody
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
             }
-
-            Spacer()
+            .padding(.horizontal, 16)
+            .padding(.bottom, max(proxy.safeAreaInsets.bottom, 12))
         }
-        .padding(.horizontal)
-        .padding(.top, 10)
+        .frame(maxWidth: .infinity)
+        .frame(height: height, alignment: .top)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .shadow(color: .black.opacity(0.22), radius: 18, y: -4)
+        .padding(.horizontal, 8)
+        .padding(.bottom, 6)
+        .gesture(sheetDragGesture)
+        .animation(.snappy, value: sheetState)
     }
 
-    private func personalHistoryOverlay(maxWidth: CGFloat) -> some View {
-        HStack(spacing: 0) {
-            if showsPersonalHistory {
-                personalHistoryPanel(maxWidth: maxWidth)
-                    .transition(.move(edge: .leading).combined(with: .opacity))
-            }
-
-            Button {
+    private var dragHandle: some View {
+        Capsule()
+            .fill(.secondary.opacity(0.35))
+            .frame(width: 38, height: 5)
+            .contentShape(Rectangle())
+            .onTapGesture {
                 withAnimation(.snappy) {
-                    showsPersonalHistory.toggle()
+                    sheetState = sheetState == .collapsed ? .medium : .collapsed
                 }
-            } label: {
-                Image(systemName: showsPersonalHistory ? "chevron.left" : "chevron.right")
-                    .font(.headline)
-                    .frame(width: 34, height: 54)
-                    .background(.regularMaterial)
-                    .clipShape(UnevenRoundedRectangle(
-                        topLeadingRadius: showsPersonalHistory ? 0 : 8,
-                        bottomLeadingRadius: showsPersonalHistory ? 0 : 8,
-                        bottomTrailingRadius: 8,
-                        topTrailingRadius: 8
-                    ))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(showsPersonalHistory ? "Hide personal history" : "Show personal history")
-
-            Spacer()
-        }
-        .padding(.top, 86)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private func personalHistoryPanel(maxWidth: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label("Personal History", systemImage: "clock.arrow.circlepath")
+    @ViewBuilder
+    private var sheetBody: some View {
+        if let selectedGroup = vm.selectedGroup {
+            ScrollView {
+                ParkingSpotDetailSheetView(
+                    group: selectedGroup,
+                    now: now,
+                    onBack: {
+                        returnFromDetail()
+                    },
+                    onOpenAppleMaps: {
+                        mapHandoff.openDirections(to: selectedGroup.coordinate, placeName: selectedGroup.name, preferred: .appleMaps)
+                    },
+                    onOpenGoogleMaps: {
+                        mapHandoff.openDirections(to: selectedGroup.coordinate, placeName: selectedGroup.name, preferred: .googleMaps)
+                    }
+                )
+                .padding(.horizontal, -16)
+                .padding(.top, 2)
+            }
+        } else {
+            switch sheetState {
+            case .collapsed:
+                EmptyView()
+            case .medium:
+                mediumContent
+            case .expanded:
+                expandedContent
+            }
+        }
+    }
+
+    private var mediumContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            statusTextView
+
+            personalHistoryHeader
+
+            if vm.visibleGroups.isEmpty {
+                emptyHistoryText
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(vm.visibleGroups.prefix(3)) { group in
+                        personalHistorySpotButton(for: group)
+                    }
+                }
+            }
+        }
+        .accessibilityIdentifier(A11y.historyPreviewPanel)
+    }
+
+    private var expandedContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                statusTextView
+
+                if !vm.searchResults.isEmpty {
+                    searchResultsSection
+                }
+
+                personalHistoryHeader
+
+                if vm.visibleGroups.isEmpty {
+                    emptyHistoryText
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(vm.visibleGroups) { group in
+                            personalHistorySpotButton(for: group)
+                        }
+                    }
+                }
+            }
+            .padding(.bottom, 18)
+        }
+        .accessibilityIdentifier(A11y.historySearchPanel)
+    }
+
+    @ViewBuilder
+    private var statusTextView: some View {
+        if let statusText = vm.statusText {
+            Text(statusText)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier(A11y.historySearchStatus)
+        }
+    }
+
+    private var personalHistoryHeader: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "clock.arrow.circlepath")
+                .foregroundStyle(.blue)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Personal History")
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                Spacer()
-                Text("\(vm.visibleGroups.count)")
+
+                Text(personalHistorySummaryText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Divider()
+            Spacer()
 
-            if vm.visibleGroups.isEmpty {
-                Text("No saved spots nearby")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 6)
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(vm.visibleGroups.prefix(8)) { group in
-                            Button {
-                                vm.selectGroup(group)
-                                camera = vm.cameraPosition(centeredOn: group.coordinate)
-                            } label: {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "mappin.circle.fill")
-                                            .foregroundStyle(.blue)
-                                        Text(group.name)
-                                            .font(.footnote)
-                                            .fontWeight(.semibold)
-                                            .lineLimit(1)
-                                        Spacer(minLength: 0)
-                                    }
-
-                                    Text("\(group.count) session\(group.count == 1 ? "" : "s")")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 7)
-                                .padding(.horizontal, 8)
-                                .background(.thinMaterial)
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier(A11y.historyPersonalSpotButton)
-                        }
+            if sheetState == .medium {
+                Button {
+                    withAnimation(.snappy) {
+                        sheetState = .expanded
                     }
+                } label: {
+                    Image(systemName: "chevron.up")
+                        .font(.footnote.weight(.semibold))
                 }
-                .frame(maxHeight: 280)
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier(A11y.historyPersonalHistoryToggle)
+                .accessibilityLabel("Expand personal history")
             }
         }
-        .padding(12)
-        .frame(width: maxWidth)
-        .background(.regularMaterial)
-        .clipShape(UnevenRoundedRectangle(
-            topLeadingRadius: 0,
-            bottomLeadingRadius: 0,
-            bottomTrailingRadius: 8,
-            topTrailingRadius: 8
-        ))
-        .shadow(color: .black.opacity(0.14), radius: 8, y: 3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var emptyHistoryText: some View {
+        Text(vm.searchCenter == nil ? "No saved spots yet" : "No saved spots nearby")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 4)
+    }
+
+    private var searchResultsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Search Results")
+                .font(.footnote)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+
+            ForEach(vm.searchResults.prefix(8)) { result in
+                Button {
+                    vm.selectSearchResult(result)
+                    camera = vm.cameraPosition(centeredOn: result.coordinate)
+                    isSearchFocused = false
+                    withAnimation(.snappy) {
+                        sheetState = .expanded
+                    }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "magnifyingglass.circle.fill")
+                            .foregroundStyle(.blue)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(result.title)
+                                .font(.footnote)
+                                .fontWeight(.semibold)
+                                .lineLimit(1)
+
+                            if !result.subtitle.isEmpty {
+                                Text(result.subtitle)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 10)
+                    .background(.thinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func personalHistorySpotButton(for group: ParkingSpotGroup) -> some View {
+        Button {
+            detailReturnState = sheetState == .collapsed ? .medium : sheetState
+            vm.selectGroup(group)
+            camera = vm.cameraPosition(centeredOn: group.coordinate)
+            isSearchFocused = false
+            withAnimation(.snappy) {
+                sheetState = .expanded
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "mappin.circle.fill")
+                    .foregroundStyle(.blue)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(group.name)
+                        .font(.footnote)
+                        .fontWeight(.semibold)
+                        .lineLimit(1)
+
+                    Text("\(group.count) session\(group.count == 1 ? "" : "s")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .background(.thinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(A11y.historyPersonalSpotButton)
     }
 
     private var searchControls: some View {
@@ -211,19 +375,31 @@ struct HistoryMapView: View {
                 .foregroundStyle(.secondary)
 
             TextField("Search address", text: $vm.searchText)
+                .focused($isSearchFocused)
                 .textInputAutocapitalization(.words)
                 .submitLabel(.search)
                 .accessibilityIdentifier(A11y.historySearchField)
+                .onTapGesture {
+                    withAnimation(.snappy) {
+                        if sheetState == .collapsed {
+                            sheetState = .medium
+                        }
+                    }
+                }
                 .onSubmit {
                     runSearch()
                 }
 
             if vm.isSearching {
                 ProgressView()
-            } else if vm.searchCenter != nil {
+            } else if vm.searchCenter != nil || !vm.searchResults.isEmpty {
                 Button {
                     vm.clearSearch()
+                    detailReturnState = nil
                     camera = vm.defaultCameraPosition()
+                    withAnimation(.snappy) {
+                        sheetState = .collapsed
+                    }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                 }
@@ -245,20 +421,104 @@ struct HistoryMapView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var sheetDragGesture: some Gesture {
+        DragGesture(minimumDistance: 8)
+            .updating($sheetDragOffset) { value, state, _ in
+                state = value.translation.height
+            }
+            .onEnded { value in
+                let translation = value.translation.height
+                withAnimation(.snappy) {
+                    if translation < -45 {
+                        sheetState = sheetState.expanded()
+                    } else if translation > 45 {
+                        sheetState = sheetState.collapsed()
+                    }
+                }
+            }
     }
 
     private func runSearch() {
+        vm.clearSelection()
+        detailReturnState = nil
+        withAnimation(.snappy) {
+            sheetState = .expanded
+        }
+
         Task {
-            if let coordinate = await vm.searchAddress() {
-                camera = vm.cameraPosition(centeredOn: coordinate)
+            let results = await vm.searchAddressResults()
+            if results.count == 1, let result = results.first {
+                vm.selectSearchResult(result)
+                camera = vm.cameraPosition(centeredOn: result.coordinate)
             }
         }
     }
 
+    private func returnFromDetail() {
+        let nextState = detailReturnState ?? .collapsed
+        detailReturnState = nil
+        vm.clearSelection()
+        isSearchFocused = false
+
+        withAnimation(.snappy) {
+            sheetState = nextState
+        }
+    }
+
+    private func sheetHeight(for state: MapSheetState, in proxy: GeometryProxy) -> CGFloat {
+        let availableHeight = proxy.size.height
+        switch state {
+        case .collapsed:
+            return 118 + max(proxy.safeAreaInsets.bottom, 8)
+        case .medium:
+            return min(320, availableHeight * 0.42)
+        case .expanded:
+            return max(360, availableHeight * 0.78)
+        }
+    }
+
+    private var personalHistorySummaryText: String {
+        if vm.isSearching {
+            return "Searching address..."
+        }
+
+        let count = vm.visibleGroups.count
+        if count == 0 {
+            return vm.searchCenter == nil ? "No saved spots yet" : "No saved spots nearby"
+        }
+
+        return "\(count) saved spot\(count == 1 ? "" : "s") nearby"
+    }
+
     private func markerTitle(for group: ParkingSpotGroup) -> String {
         group.count <= 1 ? group.name : "\(group.name) (\(group.count))"
+    }
+}
+
+private enum MapSheetState {
+    case collapsed
+    case medium
+    case expanded
+
+    func expanded() -> MapSheetState {
+        switch self {
+        case .collapsed:
+            return .medium
+        case .medium, .expanded:
+            return .expanded
+        }
+    }
+
+    func collapsed() -> MapSheetState {
+        switch self {
+        case .collapsed, .medium:
+            return .collapsed
+        case .expanded:
+            return .medium
+        }
     }
 }

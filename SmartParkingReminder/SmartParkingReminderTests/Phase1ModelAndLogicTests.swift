@@ -24,9 +24,10 @@ final class Phase1ModelAndLogicTests: XCTestCase {
         XCTAssertGreaterThan(s.remainingTimeInterval(now: start), 0)
 
         XCTAssertEqual(s.displayStatus(now: expectedEnd), .overdue)
-        XCTAssertLessThanOrEqual(s.remainingTimeInterval(now: expectedEnd), 0)
+        XCTAssertEqual(s.remainingTimeInterval(now: expectedEnd), 0)
 
         XCTAssertEqual(s.displayStatus(now: expectedEnd.addingTimeInterval(5)), .overdue)
+        XCTAssertEqual(s.remainingTimeInterval(now: expectedEnd.addingTimeInterval(5)), 0)
     }
 
     // TC-10 (P1) Group nearby sessions into one marker
@@ -86,5 +87,104 @@ final class Phase1ModelAndLogicTests: XCTestCase {
 
         let groups = svc.groupSessions([s0, s1])
         XCTAssertEqual(groups.count, 2)
+    }
+
+    func test_Phase2DisplayFormatter_NeverFormatsNegativeIntervals() throws {
+        let formatter = ParkingSessionDisplayFormatter()
+
+        XCTAssertEqual(formatter.formatTimeInterval(-111), "0m 0s")
+    }
+
+    func test_Phase1HistoryTimingSummary_CompletedOnTimeSessionCountsOnTime() throws {
+        let start = ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!
+        let session = ParkingSession(
+            locationName: "On Time Lot",
+            latitude: 43.6532,
+            longitude: -79.3832,
+            startTime: start,
+            expectedEndTime: start.addingTimeInterval(60),
+            actualEndTime: start.addingTimeInterval(60),
+            note: "",
+            persistedStatus: .completed
+        )
+        let group = makeGroup(sessions: [session])
+
+        let summary = group.timingSummary(now: start.addingTimeInterval(120))
+
+        XCTAssertEqual(summary.onTime, 1)
+        XCTAssertEqual(summary.active, 0)
+        XCTAssertEqual(summary.overdue, 0)
+        XCTAssertEqual(session.historyStatusLine(now: start.addingTimeInterval(120)), "Completed · On time")
+        XCTAssertNil(session.historyOverdueLine(now: start.addingTimeInterval(120)))
+    }
+
+    func test_Phase1HistoryTimingSummary_CompletedOverdueSessionCountsOverdue() throws {
+        let start = ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!
+        let session = ParkingSession(
+            locationName: "Late Lot",
+            latitude: 43.6532,
+            longitude: -79.3832,
+            startTime: start,
+            expectedEndTime: start.addingTimeInterval(60),
+            actualEndTime: start.addingTimeInterval(180),
+            note: "",
+            persistedStatus: .completed
+        )
+        let group = makeGroup(sessions: [session])
+
+        let summary = group.timingSummary(now: start.addingTimeInterval(240))
+
+        XCTAssertEqual(summary.onTime, 0)
+        XCTAssertEqual(summary.active, 0)
+        XCTAssertEqual(summary.overdue, 1)
+        XCTAssertEqual(session.timingOutcome(now: start.addingTimeInterval(240)).overdueDuration, 120)
+    }
+
+    func test_Phase1HistoryTimingSummary_ActiveOverdueSessionCountsOverdue() throws {
+        let start = ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!
+        let session = ParkingSession(
+            locationName: "Active Late Lot",
+            latitude: 43.6532,
+            longitude: -79.3832,
+            startTime: start,
+            expectedEndTime: start.addingTimeInterval(60),
+            actualEndTime: nil,
+            note: "",
+            persistedStatus: .active
+        )
+        let group = makeGroup(sessions: [session])
+
+        let summary = group.timingSummary(now: start.addingTimeInterval(180))
+
+        XCTAssertEqual(summary.onTime, 0)
+        XCTAssertEqual(summary.active, 0)
+        XCTAssertEqual(summary.overdue, 1)
+        XCTAssertEqual(session.historyStatusLine(now: start.addingTimeInterval(180)), "Active · Overdue")
+    }
+
+    func test_Phase1HistoryRecentSessionRowText_ShowsOverdueDuration() throws {
+        let start = ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!
+        let session = ParkingSession(
+            locationName: "Late Row Lot",
+            latitude: 43.6532,
+            longitude: -79.3832,
+            startTime: start,
+            expectedEndTime: start.addingTimeInterval(60),
+            actualEndTime: start.addingTimeInterval(171),
+            note: "",
+            persistedStatus: .completed
+        )
+
+        XCTAssertEqual(session.historyStatusLine(now: start.addingTimeInterval(240)), "Completed · Overdue")
+        XCTAssertEqual(session.historyOverdueLine(now: start.addingTimeInterval(240)), "Overdue by 1m 51s")
+    }
+
+    private func makeGroup(sessions: [ParkingSession]) -> ParkingSpotGroup {
+        ParkingSpotGroup(
+            id: "test-group",
+            coordinate: CLLocationCoordinate2D(latitude: 43.6532, longitude: -79.3832),
+            name: "Test Group",
+            sessions: sessions
+        )
     }
 }

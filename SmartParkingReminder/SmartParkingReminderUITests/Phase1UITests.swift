@@ -51,7 +51,7 @@ final class Phase1UITests: XCTestCase {
 
         openFirstSpotFromPersonalHistory()
 
-        let sheet = app.otherElements.matching(identifier: "spotDetail.sheet").firstMatch
+        let sheet = app.otherElements.matching(identifier: "historySpotDetailSheet").firstMatch
         XCTAssertTrue(sheet.waitForExistence(timeout: 5))
 
         XCTAssertTrue(app.staticTexts["Lot A"].exists)
@@ -70,7 +70,7 @@ final class Phase1UITests: XCTestCase {
         // Use the visible personal history side panel to open detail sheet.
         openFirstSpotFromPersonalHistory()
 
-        let sheet = app.otherElements.matching(identifier: "spotDetail.sheet").firstMatch
+        let sheet = app.otherElements.matching(identifier: "historySpotDetailSheet").firstMatch
         XCTAssertTrue(sheet.waitForExistence(timeout: 5))
 
         XCTAssertTrue(app.staticTexts.matching(identifier: "spotDetail.name").firstMatch.exists)
@@ -79,6 +79,30 @@ final class Phase1UITests: XCTestCase {
 
         XCTAssertTrue(app.buttons.matching(identifier: "spotDetail.openAppleMaps").firstMatch.exists)
         XCTAssertTrue(app.buttons.matching(identifier: "spotDetail.openGoogleMaps").firstMatch.exists)
+    }
+
+    func test_Phase1HistoryDetail_BackReturnsToHistoryPanel() {
+        startSession(location: "Back Test Spot", note: "")
+        app.buttons.matching(identifier: "home.endParking").firstMatch.tap()
+
+        app.tabBars.buttons["Map"].tap()
+
+        let map = app.otherElements.matching(identifier: "history.map").firstMatch
+        XCTAssertTrue(map.waitForExistence(timeout: 5))
+
+        openFirstSpotFromPersonalHistory()
+
+        let sheet = app.otherElements.matching(identifier: "historySpotDetailSheet").firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 5))
+
+        let backButton = app.buttons.matching(identifier: "historyDetailBackButton").firstMatch
+        XCTAssertTrue(backButton.waitForExistence(timeout: 5))
+        backButton.tap()
+
+        let historyPanel = app.descendants(matching: .any).matching(identifier: "historySearchPanel").firstMatch
+        XCTAssertTrue(historyPanel.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.otherElements.matching(identifier: "historySpotDetailSheet").firstMatch.exists)
+        XCTAssertTrue(map.exists)
     }
 
     // TC-14 (P0) Persistence after relaunch
@@ -92,6 +116,56 @@ final class Phase1UITests: XCTestCase {
         let activeCard = app.otherElements.matching(identifier: "home.activeSessionCard").firstMatch
         XCTAssertTrue(activeCard.waitForExistence(timeout: 5))
         XCTAssertTrue(activeCard.staticTexts["Lot A"].exists)
+    }
+
+    func test_Phase2ActiveSession_DueSoonStateIsVisible() {
+        relaunchWithSeededActiveSession(location: "Due Soon Lot", endOffsetSeconds: 10 * 60)
+
+        let activeCard = app.otherElements.matching(identifier: "home.activeSessionCard").firstMatch
+        XCTAssertTrue(activeCard.waitForExistence(timeout: 5))
+
+        let status = app.staticTexts.matching(identifier: "home.sessionStatus").firstMatch
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        XCTAssertEqual(status.label, "Due Soon")
+
+        let remaining = app.staticTexts.matching(identifier: "home.remainingTime").firstMatch
+        XCTAssertTrue(remaining.exists)
+        XCTAssertFalse(remaining.label.contains("-"))
+    }
+
+    func test_Phase2ActiveSession_OverdueStateIsVisibleWithoutAutoEnding() {
+        relaunchWithSeededActiveSession(location: "Overdue Lot", endOffsetSeconds: -2 * 60)
+
+        let activeCard = app.otherElements.matching(identifier: "home.activeSessionCard").firstMatch
+        XCTAssertTrue(activeCard.waitForExistence(timeout: 5))
+        XCTAssertTrue(activeCard.staticTexts["Overdue Lot"].exists)
+
+        let status = app.staticTexts.matching(identifier: "home.sessionStatus").firstMatch
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        XCTAssertEqual(status.label, "Overdue")
+
+        let remaining = app.staticTexts.matching(identifier: "home.remainingTime").firstMatch
+        XCTAssertTrue(remaining.exists)
+        XCTAssertTrue(remaining.label.hasPrefix("Overdue by "))
+        XCTAssertFalse(remaining.label.contains("-"))
+        XCTAssertTrue(app.buttons.matching(identifier: "home.endParking").firstMatch.exists)
+    }
+
+    func test_Phase2QuickStart_ThirtyMinutesStartsActiveSession() {
+        let quickStartPanel = app.descendants(matching: .any).matching(identifier: "home.quickStartPanel").firstMatch
+        XCTAssertTrue(quickStartPanel.waitForExistence(timeout: 5))
+
+        let thirtyMinuteButton = app.buttons.matching(identifier: "home.quickStart.30").firstMatch
+        XCTAssertTrue(thirtyMinuteButton.waitForExistence(timeout: 5))
+        thirtyMinuteButton.tap()
+
+        let activeCard = app.otherElements.matching(identifier: "home.activeSessionCard").firstMatch
+        XCTAssertTrue(activeCard.waitForExistence(timeout: 5))
+        XCTAssertTrue(activeCard.staticTexts["Current Location"].exists)
+
+        let remaining = app.staticTexts.matching(identifier: "home.remainingTime").firstMatch
+        XCTAssertTrue(remaining.exists)
+        XCTAssertFalse(remaining.label.contains("-"))
     }
 
     // MARK: - Helpers
@@ -125,7 +199,30 @@ final class Phase1UITests: XCTestCase {
         XCTAssertTrue(activeCard.waitForExistence(timeout: 5))
     }
 
+    private func relaunchWithSeededActiveSession(location: String, endOffsetSeconds: TimeInterval) {
+        app.terminate()
+        app.launchEnvironment["UITEST_ACTIVE_SESSION_LOCATION"] = location
+        app.launchEnvironment["UITEST_ACTIVE_SESSION_OFFSET_SECONDS"] = "\(Int(endOffsetSeconds))"
+        app.launch()
+    }
+
     private func openFirstSpotFromPersonalHistory() {
+        let detailHook = app.buttons.matching(identifier: "uitest.openFirstSpotDetail").firstMatch
+        if detailHook.waitForExistence(timeout: 5) {
+            detailHook.tap()
+            return
+        }
+
+        let searchField = app.textFields.matching(identifier: "history.searchField").firstMatch
+        if searchField.waitForExistence(timeout: 5) {
+            searchField.tap()
+        }
+
+        let toggle = app.buttons.matching(identifier: "history.personalHistoryToggle").firstMatch
+        if toggle.waitForExistence(timeout: 5) {
+            toggle.tap()
+        }
+
         let spotButton = app.buttons.matching(identifier: "history.personalSpotButton").firstMatch
         XCTAssertTrue(spotButton.waitForExistence(timeout: 5))
         spotButton.tap()

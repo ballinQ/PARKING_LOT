@@ -2,9 +2,14 @@ import Foundation
 import MapKit
 import UIKit
 
-protocol URLLaunching {
+@MainActor
+protocol URLLaunching: AnyObject {
     func canOpenURL(_ url: URL) -> Bool
-    func open(_ url: URL, options: [UIApplication.OpenExternalURLOptionsKey: Any], completionHandler: ((Bool) -> Void)?)
+    func open(
+        _ url: URL,
+        options: [UIApplication.OpenExternalURLOptionsKey: Any],
+        completionHandler: (@MainActor @Sendable (Bool) -> Void)?
+    )
 }
 
 extension UIApplication: URLLaunching {}
@@ -20,7 +25,11 @@ final class MapHandoffService {
 
     private let launcher: URLLaunching
 
-    init(launcher: URLLaunching = UIApplication.shared) {
+    init() {
+        self.launcher = UIApplication.shared
+    }
+
+    init(launcher: URLLaunching) {
         self.launcher = launcher
     }
 

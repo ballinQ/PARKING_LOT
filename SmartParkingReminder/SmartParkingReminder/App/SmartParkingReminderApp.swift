@@ -12,7 +12,13 @@ struct SmartParkingReminderApp: App {
             let notifications = ParkingNotificationService(center: NoopUserNotificationCenter())
             _store = StateObject(wrappedValue: ParkingSessionStore(storage: storage, notifications: notifications))
         } else {
-            _store = StateObject(wrappedValue: ParkingSessionStore())
+            let activityLifecycle: ParkingActivityLifecycleManaging
+            if #available(iOS 16.2, *) {
+                activityLifecycle = ActivityKitParkingActivityLifecycleManager()
+            } else {
+                activityLifecycle = NoopParkingActivityLifecycleManager()
+            }
+            _store = StateObject(wrappedValue: ParkingSessionStore(activityLifecycle: activityLifecycle))
         }
     }
 

@@ -10,7 +10,13 @@ enum A11y {
     static let homeEndParkingButton = "home.endParking"
     static let homeNoActiveSessionView = "home.noActiveSession"
     static let homeActiveSessionCard = "home.activeSessionCard"
+    static let homeSessionStatusLabel = "home.sessionStatus"
     static let homeRemainingTimeLabel = "home.remainingTime"
+    static let homeQuickStartPanel = "home.quickStartPanel"
+
+    static func homeQuickStartButton(minutes: Int) -> String {
+        "home.quickStart.\(minutes)"
+    }
 
     // New Session
     static let newSessionLocationField = "newSession.locationField"
@@ -25,10 +31,14 @@ enum A11y {
     static let historySearchButton = "history.searchButton"
     static let historyClearSearchButton = "history.clearSearchButton"
     static let historySearchStatus = "history.searchStatus"
+    static let historyPersonalHistoryToggle = "history.personalHistoryToggle"
     static let historyPersonalSpotButton = "history.personalSpotButton"
+    static let historySearchPanel = "historySearchPanel"
+    static let historyPreviewPanel = "historyPreviewPanel"
 
     // Detail Sheet
-    static let detailSheet = "spotDetail.sheet"
+    static let detailSheet = "historySpotDetailSheet"
+    static let detailBackButton = "historyDetailBackButton"
     static let detailSpotName = "spotDetail.name"
     static let detailSpotCount = "spotDetail.count"
     static let detailSpotLatLon = "spotDetail.latlon"

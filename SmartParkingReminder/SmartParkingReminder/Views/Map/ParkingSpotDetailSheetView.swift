@@ -4,11 +4,23 @@ struct ParkingSpotDetailSheetView: View {
     let group: ParkingSpotGroup
     let now: Date
 
+    let onBack: () -> Void
     let onOpenAppleMaps: () -> Void
     let onOpenGoogleMaps: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            Button {
+                onBack()
+            } label: {
+                Text("< Personal History")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.blue)
+            .accessibilityIdentifier(A11y.detailBackButton)
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(group.name)
                     .accessibilityIdentifier(A11y.detailSpotName)
@@ -34,19 +46,34 @@ struct ParkingSpotDetailSheetView: View {
                     .foregroundStyle(.secondary)
 
                 ForEach(group.sessions.prefix(5)) { s in
+                    let timing = s.timingOutcome(now: now)
+
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text(s.startTime.formatted(date: .abbreviated, time: .shortened))
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                             Spacer()
-                            Text(s.displayStatus(now: now).rawValue.capitalized)
+                            Text(timing.statusLine)
                                 .font(.caption)
                                 .fontWeight(.semibold)
+                                .foregroundStyle(timing.result == .overdue ? .red : .secondary)
                         }
 
                         Text("Expected end: \(s.expectedEndTime.formatted(date: .abbreviated, time: .shortened))")
                             .font(.footnote)
+
+                        if let actualEndTime = s.actualEndTime {
+                            Text("Ended: \(actualEndTime.formatted(date: .abbreviated, time: .shortened))")
+                                .font(.footnote)
+                        }
+
+                        if let overdueLine = s.historyOverdueLine(now: now) {
+                            Text(overdueLine)
+                                .font(.footnote)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.red)
+                        }
 
                         if !s.note.isEmpty {
                             Text(s.note)
@@ -88,30 +115,14 @@ private struct StatusSummaryView: View {
     let now: Date
 
     var body: some View {
-        let summary = computeSummary()
+        let summary = group.timingSummary(now: now)
 
         return HStack(spacing: 12) {
-            SummaryPill(title: "Completed", value: summary.completed, color: .green)
+            SummaryPill(title: "On Time", value: summary.onTime, color: .green)
             SummaryPill(title: "Active", value: summary.active, color: .blue)
             SummaryPill(title: "Overdue", value: summary.overdue, color: .red)
             Spacer()
         }
-    }
-
-    private func computeSummary() -> (completed: Int, active: Int, overdue: Int) {
-        var completed = 0
-        var active = 0
-        var overdue = 0
-
-        for s in group.sessions {
-            switch s.displayStatus(now: now) {
-            case .completed: completed += 1
-            case .active: active += 1
-            case .overdue: overdue += 1
-            }
-        }
-
-        return (completed, active, overdue)
     }
 }
 

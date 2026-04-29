@@ -110,7 +110,11 @@ private final class FakeURLLauncher: URLLaunching {
     init(canOpen: Bool) { self.canOpen = canOpen }
 
     func canOpenURL(_ url: URL) -> Bool { canOpen }
-    func open(_ url: URL, options: [UIApplication.OpenExternalURLOptionsKey : Any], completionHandler: ((Bool) -> Void)?) {
+    func open(
+        _ url: URL,
+        options: [UIApplication.OpenExternalURLOptionsKey : Any],
+        completionHandler: (@MainActor @Sendable (Bool) -> Void)?
+    ) {
         completionHandler?(true)
     }
 }

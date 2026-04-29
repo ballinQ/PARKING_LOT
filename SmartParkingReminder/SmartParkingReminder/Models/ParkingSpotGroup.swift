@@ -17,4 +17,24 @@ struct ParkingSpotGroup: Identifiable {
     let sessions: [ParkingSession]
 
     var count: Int { sessions.count }
+
+    func timingSummary(now: Date) -> ParkingSpotTimingSummary {
+        sessions.reduce(into: ParkingSpotTimingSummary()) { summary, session in
+            let outcome = session.timingOutcome(now: now)
+            switch (outcome.lifecycle, outcome.result) {
+            case (.completed, .onTime), (.completed, .dueSoon):
+                summary.onTime += 1
+            case (.active, .onTime), (.active, .dueSoon):
+                summary.active += 1
+            case (_, .overdue):
+                summary.overdue += 1
+            }
+        }
+    }
+}
+
+struct ParkingSpotTimingSummary: Equatable {
+    var onTime = 0
+    var active = 0
+    var overdue = 0
 }

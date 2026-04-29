@@ -2,10 +2,18 @@ import Foundation
 import MapKit
 import SwiftUI
 
+struct HistoryMapSearchResult: Identifiable {
+    let id = UUID()
+    let title: String
+    let subtitle: String
+    let coordinate: CLLocationCoordinate2D
+}
+
 @MainActor
 final class HistoryMapViewModel: ObservableObject {
     @Published private(set) var groups: [ParkingSpotGroup] = []
     @Published private(set) var visibleGroups: [ParkingSpotGroup] = []
+    @Published private(set) var searchResults: [HistoryMapSearchResult] = []
     @Published private(set) var searchCenter: CLLocationCoordinate2D? = nil
     @Published private(set) var statusText: String? = nil
     @Published var searchText: String = ""
@@ -73,6 +81,13 @@ final class HistoryMapViewModel: ObservableObject {
         selectedGroupID = nil
     }
 
+    func selectSearchResult(_ result: HistoryMapSearchResult) {
+        searchText = result.title
+        searchCenter = result.coordinate
+        applySearchFilter(searchName: result.title)
+        clearSelection()
+    }
+
     func defaultCameraPosition() -> MapCameraPosition {
         guard let first = visibleGroups.first else {
             return .automatic
@@ -93,10 +108,25 @@ final class HistoryMapViewModel: ObservableObject {
 
     @discardableResult
     func searchAddress() async -> CLLocationCoordinate2D? {
+        await searchAddressResults()
+        guard let first = searchResults.first else { return nil }
+        selectSearchResult(first)
+        return first.coordinate
+    }
+
+    @discardableResult
+    func searchAddressResults() async -> [HistoryMapSearchResult] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return nil }
+        guard !query.isEmpty else {
+            searchResults = []
+            searchCenter = nil
+            statusText = nil
+            visibleGroups = groups
+            return []
+        }
 
         isSearching = true
+        searchResults = []
         statusText = nil
         defer { isSearching = false }
 
@@ -105,26 +135,37 @@ final class HistoryMapViewModel: ObservableObject {
 
         do {
             let response = try await MKLocalSearch(request: request).start()
-            guard let item = response.mapItems.first else {
+            let results = response.mapItems.map { item in
+                HistoryMapSearchResult(
+                    title: item.name ?? query,
+                    subtitle: item.placemark.title ?? "",
+                    coordinate: item.placemark.coordinate
+                )
+            }
+
+            searchResults = results
+
+            guard !results.isEmpty else {
                 searchCenter = nil
                 visibleGroups = groups
                 statusText = "No address found for \"\(query)\"."
-                return nil
+                return []
             }
 
-            let coordinate = item.placemark.coordinate
-            searchCenter = coordinate
-            applySearchFilter(searchName: item.name ?? query)
-            clearSelection()
-            return coordinate
+            statusText = "\(results.count) result\(results.count == 1 ? "" : "s") for \"\(query)\"."
+            return results
         } catch {
+            searchResults = []
+            searchCenter = nil
+            visibleGroups = groups
             statusText = "Could not search that address. Check the spelling or try a nearby landmark."
-            return nil
+            return []
         }
     }
 
     func clearSearch() {
         searchText = ""
+        searchResults = []
         searchCenter = nil
         statusText = nil
         visibleGroups = groups
