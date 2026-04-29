@@ -210,6 +210,12 @@ Manual verification still needed:
 - Focused unit verification passed after Quick Start: 29 tests, 0 failures, on iPhone 17 Simulator.
 - Focused Quick Start UI verification passed: 1 UI test, 0 failures, on iPhone 17 Simulator.
 - Phase 2 progress estimate updated after the first Quick Start implementation pass: about 62% complete.
+- Fixed a Phase 1 History detail UX trap inside the map-only bottom-sheet workflow.
+- Saved spot detail now has a visible `< Personal History` back control at the top of the detail sheet.
+- Tapping Back clears the selected detail state, keeps the map region/markers visible, and returns to the prior History/search panel state.
+- Added stable accessibility identifiers: `historyDetailBackButton`, `historySpotDetailSheet`, `historySearchPanel`, and `historyPreviewPanel`.
+- Added UI coverage for opening a History detail, tapping Back, and confirming the user returns to the History/search panel without leaving Map.
+- Focused History back UI verification passed: 3 UI tests, 0 failures, on iPhone 17 Simulator.
 
 ## Testing
 
@@ -261,9 +267,9 @@ Latest Phase 2 focused active-session UI check:
 
 Latest Phase 2 focused Map bottom-sheet UI check:
 
-- Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:SmartParkingReminderUITests/Phase1UITests/test_TC07_TC08_EndSession_AppearsInHistoryMapDetail -only-testing:SmartParkingReminderUITests/Phase1UITests/test_TC11_TC12_MapDetailSheet_ShowsSpotInfoAndActions -derivedDataPath /tmp/SmartParkingReminderHistoryTimingUITests`
+- Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:SmartParkingReminderUITests/Phase1UITests/test_TC07_TC08_EndSession_AppearsInHistoryMapDetail -only-testing:SmartParkingReminderUITests/Phase1UITests/test_TC11_TC12_MapDetailSheet_ShowsSpotInfoAndActions -only-testing:SmartParkingReminderUITests/Phase1UITests/test_Phase1HistoryDetail_BackReturnsToHistoryPanel -derivedDataPath /tmp/SmartParkingReminderHistoryBackUITests2`
 - Result: `** TEST SUCCEEDED **`
-- UI tests: 2 passed, 0 failed.
+- UI tests: 3 passed, 0 failed.
 
 Latest Phase 2 full simulator check:
 
