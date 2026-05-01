@@ -50,9 +50,7 @@ struct HistoryMapView: View {
         .onChange(of: isSearchFocused) { _, focused in
             guard focused else { return }
             withAnimation(.snappy) {
-                if sheetState == .collapsed {
-                    sheetState = .medium
-                }
+                sheetState = .expanded
             }
         }
     }
@@ -188,7 +186,11 @@ struct HistoryMapView: View {
 
     private var mediumContent: some View {
         VStack(alignment: .leading, spacing: 12) {
+            accessibilityPanelMarker(identifier: A11y.historyPreviewPanel, label: "History preview panel")
+
             statusTextView
+
+            radiusPicker
 
             personalHistoryHeader
 
@@ -202,13 +204,16 @@ struct HistoryMapView: View {
                 }
             }
         }
-        .accessibilityIdentifier(A11y.historyPreviewPanel)
     }
 
     private var expandedContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                accessibilityPanelMarker(identifier: A11y.historySearchPanel, label: "History search panel")
+
                 statusTextView
+
+                radiusPicker
 
                 if !vm.searchResults.isEmpty {
                     searchResultsSection
@@ -228,7 +233,14 @@ struct HistoryMapView: View {
             }
             .padding(.bottom, 18)
         }
-        .accessibilityIdentifier(A11y.historySearchPanel)
+    }
+
+    private func accessibilityPanelMarker(identifier: String, label: String) -> some View {
+        Color.clear
+            .frame(width: 1, height: 1)
+            .accessibilityElement()
+            .accessibilityLabel(label)
+            .accessibilityIdentifier(identifier)
     }
 
     @ViewBuilder
@@ -239,6 +251,32 @@ struct HistoryMapView: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityIdentifier(A11y.historySearchStatus)
+        }
+    }
+
+    @ViewBuilder
+    private var radiusPicker: some View {
+        if vm.searchCenter != nil {
+            HStack(spacing: 6) {
+                ForEach(HistorySearchRadius.allCases) { radius in
+                    Button {
+                        vm.searchRadius = radius
+                    } label: {
+                        Text(radius.label)
+                            .font(.caption.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 7)
+                            .foregroundStyle(vm.searchRadius == radius ? .white : .primary)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(vm.searchRadius == radius ? Color.blue : Color(.secondarySystemFill))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Search radius \(radius.label)")
+                }
+            }
+            .accessibilityIdentifier(A11y.historySearchRadiusPicker)
         }
     }
 
@@ -287,7 +325,7 @@ struct HistoryMapView: View {
 
     private var searchResultsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Search Results")
+            Text("Address Results")
                 .font(.footnote)
                 .fontWeight(.semibold)
                 .foregroundStyle(.secondary)
@@ -374,16 +412,20 @@ struct HistoryMapView: View {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
 
-            TextField("Search address", text: $vm.searchText)
+            TextField(
+                "Search address or saved spot",
+                text: Binding(
+                    get: { vm.searchText },
+                    set: { vm.updateSearchText($0) }
+                )
+            )
                 .focused($isSearchFocused)
                 .textInputAutocapitalization(.words)
                 .submitLabel(.search)
                 .accessibilityIdentifier(A11y.historySearchField)
                 .onTapGesture {
                     withAnimation(.snappy) {
-                        if sheetState == .collapsed {
-                            sheetState = .medium
-                        }
+                        sheetState = .expanded
                     }
                 }
                 .onSubmit {
@@ -392,7 +434,7 @@ struct HistoryMapView: View {
 
             if vm.isSearching {
                 ProgressView()
-            } else if vm.searchCenter != nil || !vm.searchResults.isEmpty {
+            } else if !vm.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || vm.searchCenter != nil || !vm.searchResults.isEmpty {
                 Button {
                     vm.clearSearch()
                     detailReturnState = nil

@@ -7,7 +7,7 @@ final class Phase1UITests: XCTestCase {
         continueAfterFailure = false
         app = XCUIApplication()
         app.launchArguments = ["UI_TESTING"]
-        app.launchEnvironment["UITEST_STORAGE_FILE"] = "parking_sessions_\(name).json"
+        app.launchEnvironment["UITEST_STORAGE_FILE"] = "parking_sessions_\(name)_\(UUID().uuidString).json"
         app.launch()
     }
 
@@ -119,7 +119,7 @@ final class Phase1UITests: XCTestCase {
     }
 
     func test_Phase2ActiveSession_DueSoonStateIsVisible() {
-        relaunchWithSeededActiveSession(location: "Due Soon Lot", endOffsetSeconds: 10 * 60)
+        relaunchWithSeededActiveSession(location: "Due Soon Lot", endOffsetSeconds: 12 * 60)
 
         let activeCard = app.otherElements.matching(identifier: "home.activeSessionCard").firstMatch
         XCTAssertTrue(activeCard.waitForExistence(timeout: 5))
@@ -166,6 +166,37 @@ final class Phase1UITests: XCTestCase {
         let remaining = app.staticTexts.matching(identifier: "home.remainingTime").firstMatch
         XCTAssertTrue(remaining.exists)
         XCTAssertFalse(remaining.label.contains("-"))
+    }
+
+    func test_Phase2HistoryMapSearch_LocalNoteSearchOpensMatchingSpotDetail() {
+        startSession(location: "Work Garage", note: "blue pillar")
+        app.buttons.matching(identifier: "home.endParking").firstMatch.tap()
+
+        let noActive = app.otherElements.matching(identifier: "home.noActiveSession").firstMatch
+        XCTAssertTrue(noActive.waitForExistence(timeout: 5))
+
+        app.tabBars.buttons["Map"].tap()
+
+        let map = app.otherElements.matching(identifier: "history.map").firstMatch
+        XCTAssertTrue(map.waitForExistence(timeout: 5))
+
+        let searchField = app.textFields.matching(identifier: "history.searchField").firstMatch
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+        searchField.tap()
+        searchField.typeText("pillar")
+
+        let status = app.staticTexts.matching(identifier: "history.searchStatus").firstMatch
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        XCTAssertEqual(status.label, "1 saved parking spot matching \"pillar\".")
+
+        let spotButton = app.buttons.matching(identifier: "history.personalSpotButton").firstMatch
+        XCTAssertTrue(spotButton.waitForExistence(timeout: 5))
+        spotButton.tap()
+
+        let sheet = app.otherElements.matching(identifier: "historySpotDetailSheet").firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Work Garage"].exists)
+        XCTAssertTrue(app.staticTexts["blue pillar"].exists)
     }
 
     // MARK: - Helpers

@@ -31,6 +31,7 @@ enum A11y {
     static let historySearchButton = "history.searchButton"
     static let historyClearSearchButton = "history.clearSearchButton"
     static let historySearchStatus = "history.searchStatus"
+    static let historySearchRadiusPicker = "history.searchRadiusPicker"
     static let historyPersonalHistoryToggle = "history.personalHistoryToggle"
     static let historyPersonalSpotButton = "history.personalSpotButton"
     static let historySearchPanel = "historySearchPanel"

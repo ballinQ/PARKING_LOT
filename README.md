@@ -6,7 +6,7 @@ This README is also the project handoff note for Codex, Clawdbot, and any other 
 
 ## Current Direction
 
-Phase 1 should be boringly reliable before Phase 2 starts.
+Phase 2 is in progress, with Phase 1 behavior frozen as the reliability baseline.
 
 The app is intentionally local-only:
 
@@ -48,7 +48,8 @@ Current UX decision: History is map-only. The old History list was removed becau
 - `ParkingNotificationService` schedules local notifications at T-15 minutes and expiry.
 - `LocationService` captures location once when starting a session.
 - `HistoryMapView` is the only History UI now.
-- `HistoryMapViewModel` groups saved sessions, performs address search with `MKLocalSearch`, filters nearby history within 1 km, and drives selected marker state.
+- `HistoryMapViewModel` groups saved sessions, asks an injectable map search provider for address results, filters nearby history within 1 km, and drives selected marker state.
+- `MapKitSearchProvider` is the production address search adapter over `MKLocalSearch`; tests can inject fake providers without network/MapKit search.
 - `ParkingSpotGroupingService` groups nearby sessions into a single marker using a simple 30 m threshold.
 - `ParkingSpotDetailSheetView` shows grouped spot details, recent sessions, notes, counts, lat/lon, and Apple/Google Maps actions.
 - `MapHandoffService` opens Apple Maps or Google Maps URLs. Prior Swift 6 sendability/main-actor warnings are fixed.
@@ -216,6 +217,62 @@ Manual verification still needed:
 - Added stable accessibility identifiers: `historyDetailBackButton`, `historySpotDetailSheet`, `historySearchPanel`, and `historyPreviewPanel`.
 - Added UI coverage for opening a History detail, tapping Back, and confirming the user returns to the History/search panel without leaving Map.
 - Focused History back UI verification passed: 3 UI tests, 0 failures, on iPhone 17 Simulator.
+- Continued Phase 2 map-search foundation work.
+- Extracted direct address lookup from `HistoryMapViewModel` into `MapSearchProviding` with a production `MapKitSearchProvider`.
+- Added deterministic unit coverage for successful address search filtering nearby saved history, and for search failure keeping existing personal history visible.
+- Regenerated the Xcode project with XcodeGen so `MapSearchProviding.swift` is included.
+- Focused Map search provider tests passed: 2 unit tests, 0 failures, on iPhone 17 Simulator.
+- Full unit verification passed after the map search provider seam: 31 tests, 0 failures, on iPhone 17 Simulator.
+- Phase 2 progress estimate after the map search provider foundation: about 64% complete.
+
+2026-04-29:
+
+- Ran the first managed Phase 2 self-test and saved the report set under `Self_report/phase2/runs/20260429_165543_phase2_report`.
+- Final Phase 2 readiness from this run: `READY WITH ACCEPTED MANUAL RISK`.
+- Final full simulator verification passed on iPhone 17 / iOS 26.2 Simulator: 31 unit tests + 8 UI tests, 0 failures.
+- Generated required Phase 2 report deliverables:
+  - `PHASE2_TEST_REPORT.md`
+  - `PHASE2_TEST_REPORT.xlsx`
+  - `PHASE2_TEST_REPORT_DATA.json`
+  - `xcodebuild_20260429_165543_final.log`
+  - `Phase2Tests_20260429_165543_final.xcresult`
+  - `attachments_manual/README.md`
+- Initial sandboxed xcodebuild attempt was blocked because Xcode could only see placeholder simulators; reran with CoreSimulator access and preserved the blocked log.
+- First full rerun exposed two UI-test fixture failures caused by stale per-test storage restoring old active sessions.
+- Fixed UI test isolation in `Phase1UITests` by assigning a unique `UITEST_STORAGE_FILE` for each test run.
+- Adjusted the seeded Due Soon UI state to use a safer 12 minute offset.
+- Focused rerun of the two previously failing UI tests passed: 2 UI tests, 0 failures.
+- Final full rerun passed and is the official evidence bundle for this checkpoint.
+- Scope scan found no forbidden Phase 2 app-code additions: no backend, login, cloud sync, analytics, ML, continuous background location, or old History list.
+- Remaining accepted manual risk: Live Activity / Dynamic Island visual presentation still needs supported simulator or device evidence before the Live Activity feature is called release-ready.
+
+2026-04-30:
+
+- Continued Phase 2 map-only search/filtering polish after the first managed Phase 2 checkpoint.
+- Added a local nearby-history radius control to the Map bottom sheet after an address is selected.
+- Radius options are 500 m, 1 km, and 2 km; changing radius recomputes visible saved spots without running another address lookup.
+- `HistoryMapViewModel` now owns `HistorySearchRadius` and keeps radius filtering testable outside SwiftUI.
+- Added `history.searchRadiusPicker` accessibility ID for future UI coverage.
+- Added unit coverage for changing search radius from 500 m to 2 km and verifying visible saved history updates.
+- Focused map-radius verification passed: 3 unit tests, 0 failures, on iPhone 17 Simulator.
+- Full unit verification passed after the map-radius slice: 32 tests, 0 failures, on iPhone 17 Simulator.
+- Phase 2 progress estimate after the radius control: about 66% complete.
+- Added local saved-history text search inside the same Map search field.
+- Typing now filters Personal History locally by grouped spot name, past session location names, and notes.
+- Pressing Search still runs address lookup through the `MapSearchProviding` seam; if address lookup fails, saved history remains visible or local matches stay shown.
+- The Map search placeholder now reads `Search address or saved spot`, and address results are labeled separately from Personal History rows.
+- Added unit coverage for local name/note matching and no-address-result fallback to local history matches.
+- Focused local History search verification passed: 4 unit tests, 0 failures, on iPhone 17 Simulator.
+- Full unit verification passed after local History search: 34 tests, 0 failures, on iPhone 17 Simulator.
+- Phase 2 progress estimate after local History search: about 68% complete.
+- Continued Phase 2 Live Activity verification.
+- Found and fixed the missing app target `NSSupportsLiveActivities` declaration.
+- Added a DEBUG-only `LIVE_ACTIVITY_TESTING` launch mode that seeds a deterministic parking session, uses the real ActivityKit lifecycle manager, avoids notification prompts, and can auto-end for dismissal evidence.
+- Verified the built app Info.plist now contains `NSSupportsLiveActivities => true`.
+- ActivityKit simulator logs now confirm Live Activity request, creation, active updates, end, dismissal, and removal.
+- Saved the Live Activity verification report and evidence under `Self_report/phase2/runs/20260430_152900_live_activity_verification/`.
+- Debug build-for-testing and Release simulator build both passed after the verification hook cleanup.
+- Phase 2 progress estimate after Live Activity lifecycle verification: about 71% complete.
 
 ## Testing
 
@@ -243,9 +300,25 @@ Latest full automated self-test result:
 
 Latest Phase 2 focused unit check:
 
-- Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:SmartParkingReminderTests -derivedDataPath /tmp/SmartParkingReminderQuickStartUnitTests3`
+- Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:SmartParkingReminderTests -derivedDataPath /tmp/SmartParkingReminderMapSearchProviderUnitTests`
 - Result: `** TEST SUCCEEDED **`
-- Unit tests: 29 passed, 0 failed.
+- Unit tests: 31 passed, 0 failed.
+
+Latest managed Phase 2 self-test:
+
+- Report folder: `Self_report/phase2/runs/20260429_165543_phase2_report`
+- Readiness: `READY WITH ACCEPTED MANUAL RISK`
+- Final command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17' -resultBundlePath Self_report/phase2/runs/20260429_165543_phase2_report/Phase2Tests_20260429_165543_final.xcresult`
+- Result: `** TEST SUCCEEDED **`
+- Unit tests: 31 passed, 0 failed.
+- UI tests: 8 passed, 0 failed.
+- Manual gap: Live Activity / Dynamic Island visual evidence not captured.
+
+Latest Phase 2 full unit check:
+
+- Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:SmartParkingReminderTests -derivedDataPath /tmp/SmartParkingReminderLocalHistorySearchUnitTests2`
+- Result: `** TEST SUCCEEDED **`
+- Unit tests: 34 passed, 0 failed.
 
 Latest Phase 2 focused Quick Start UI check:
 
@@ -258,6 +331,18 @@ Latest Phase 2 Live Activity build check:
 - Command: `xcodebuild build-for-testing -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/SmartParkingReminderLiveActivityBuild2`
 - Result: `** TEST BUILD SUCCEEDED **`
 - Coverage: app target, unit/UI test bundles, and embedded `SmartParkingReminderWidgetExtension.appex`.
+
+Latest Phase 2 Live Activity lifecycle verification:
+
+- Report folder: `Self_report/phase2/runs/20260430_152900_live_activity_verification`
+- Report: `LIVE_ACTIVITY_VERIFICATION_REPORT.md`
+- Debug build command: `xcodebuild build-for-testing -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/SmartParkingReminderLiveActivityManualBuild4`
+- Debug build result: `** TEST BUILD SUCCEEDED **`
+- Release compile command: `xcodebuild build -configuration Release -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/SmartParkingReminderReleaseLiveActivityCheck`
+- Release compile result: `** BUILD SUCCEEDED **`
+- ActivityKit log evidence: `activitykit_auto_end_log_excerpt.txt`
+- Result: ActivityKit request, create, update, end, dismiss, and removal lifecycle verified by simulator logs.
+- Remaining manual gap: final visual Lock Screen and Dynamic Island screenshot/video capture on supported device or simulator.
 
 Latest Phase 2 focused active-session UI check:
 
@@ -277,6 +362,14 @@ Latest Phase 2 full simulator check:
 - Result: `** TEST SUCCEEDED **`
 - Unit tests: 17 passed, 0 failed.
 - UI tests: 4 passed, 0 failed.
+
+Latest Phase 2 local Map search UI hardening:
+
+- Changed the Map search focus behavior so tapping the search field opens the expanded bottom sheet, keeping saved-history matches tappable while the keyboard is visible.
+- Split panel-level accessibility markers from child controls so `history.searchStatus`, `history.personalSpotButton`, and detail controls remain individually targetable by UI tests.
+- Added UI coverage for searching a saved note, opening the matching spot detail, and confirming the saved note appears.
+- Verified `Phase1UITests.test_Phase2HistoryMapSearch_LocalNoteSearchOpensMatchingSpotDetail`: `** TEST SUCCEEDED **`.
+- Re-verified `Phase1UITests.test_Phase1HistoryDetail_BackReturnsToHistoryPanel`: `** TEST SUCCEEDED **`.
 
 ## Phase 1 Self-Test Deliverables
 
@@ -301,17 +394,17 @@ Important current test mapping:
 - Do not bring the History list back unless the user explicitly changes the product decision.
 - Search should improve the map workflow, not become a separate results list.
 - Keep Phase 1 simple: no advanced clustering, no ML, no backend.
-- Avoid Node spreadsheet dependencies in this iCloud workspace; prior `exceljs`/`jszip` imports hung. Use the Python report generator.
+- Avoid repo-local legacy Node spreadsheet dependencies in this iCloud workspace; prior `exceljs`/`jszip` imports hung. Use the Phase 1 Python generator or the bundled spreadsheet runtime for managed Excel report artifacts.
 - Be careful with the dirty worktree. There are existing generated/user changes and report folders. Do not revert unrelated files.
 - Prefer `build-for-testing` locally; ask Clawdbot to run full simulator tests.
-- Live Activity now has a first ActivityKit/widget implementation. Device/simulator visual verification is still needed for Lock Screen and Dynamic Island presentation.
+- Live Activity now has a first ActivityKit/widget implementation, the required app `NSSupportsLiveActivities` declaration, and simulator lifecycle evidence. Device/simulator visual verification is still needed for final Lock Screen and Dynamic Island presentation evidence.
 - Quick Start now has a first local-only implementation. Keep future polish on the same `ParkingSessionDraft` / store creation path.
 
 ## Next Good Improvements
 
 - Tag/freeze the Phase 1 baseline before Phase 2 code work.
-- Ask Clawdbot to run the Phase 2 self-test, including Quick Start, and manually verify Live Activity presentation on a supported simulator/device.
-- Next implementation slice should be map-only search/filtering abstraction or personal spot metadata groundwork after the Phase 2 checkpoint report is saved.
+- Capture final visual Live Activity presentation on a supported simulator/device and attach evidence to the latest Phase 2 report folder.
+- Next implementation slice should be personal spot metadata groundwork; keep it local-only and do not add backend/cloud/ML/community features.
 
 ## Phase 2 Direction
 

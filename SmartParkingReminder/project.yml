@@ -30,6 +30,7 @@ targets:
         INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "Smart Parking Reminder can optionally capture your current location to save with a parking session."
         INFOPLIST_KEY_NSLocationUsageDescription: "Smart Parking Reminder can optionally capture your current location to save with a parking session."
         INFOPLIST_KEY_UIBackgroundModes: []
+        INFOPLIST_KEY_NSSupportsLiveActivities: YES
         INFOPLIST_KEY_LSApplicationQueriesSchemes:
           - comgooglemaps
     scheme:

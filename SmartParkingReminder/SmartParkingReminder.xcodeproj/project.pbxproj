@@ -16,6 +16,7 @@
 		347E0E78AE25C48C3513E5C6 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF261C3598301BB3BB520C12 /* HistoryView.swift */; };
 		3E2161FAE429AC39792459FA /* ParkingSpotGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = C920333D2E5523F62A2DED7F /* ParkingSpotGroup.swift */; };
 		3FD1BF5D6FC2EDDD15122DED /* MapHandoffService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DB77E9E8F5CC526F19FABEB /* MapHandoffService.swift */; };
+		46607C208571B2E2991030C3 /* MapSearchProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FD17ED6B9817B874807FE92 /* MapSearchProviding.swift */; };
 		47F61BB641C75452FB2485E7 /* ParkingNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A165AA9451C06C5C0FB1400 /* ParkingNotificationService.swift */; };
 		6E7A08102E738CB42BEF951C /* SmartParkingReminderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A35237AB3661CD7F187ED12 /* SmartParkingReminderApp.swift */; };
 		6F6B22F99148906AD7B1C692 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43013DEE78CD18D248ECCCAF /* ContentView.swift */; };
@@ -92,6 +93,7 @@
 		43013DEE78CD18D248ECCCAF /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		54228D84907429B82BBB3E42 /* Phase1ModelAndLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Phase1ModelAndLogicTests.swift; sourceTree = "<group>"; };
 		5FA9A44E99C62DDD54A85F82 /* AccessibilityIDs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityIDs.swift; sourceTree = "<group>"; };
+		5FD17ED6B9817B874807FE92 /* MapSearchProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapSearchProviding.swift; sourceTree = "<group>"; };
 		65B3885C12FF82BC28EFC957 /* ParkingSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParkingSession.swift; sourceTree = "<group>"; };
 		6A35237AB3661CD7F187ED12 /* SmartParkingReminderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartParkingReminderApp.swift; sourceTree = "<group>"; };
 		6D2D9DEEF8C9405B7C263692 /* SmartParkingReminderUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SmartParkingReminderUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -299,6 +301,7 @@
 			isa = PBXGroup;
 			children = (
 				9DB77E9E8F5CC526F19FABEB /* MapHandoffService.swift */,
+				5FD17ED6B9817B874807FE92 /* MapSearchProviding.swift */,
 				940230883E082266A8FBB3B3 /* ParkingSpotGroupingService.swift */,
 			);
 			path = Maps;
@@ -486,6 +489,7 @@
 				7BDD1FF35DF2D6523761ED7D /* HomeView.swift in Sources */,
 				A6933742A234566A9B2DCBC9 /* LocationService.swift in Sources */,
 				3FD1BF5D6FC2EDDD15122DED /* MapHandoffService.swift in Sources */,
+				46607C208571B2E2991030C3 /* MapSearchProviding.swift in Sources */,
 				D109157A1ADF0F28C45291CC /* NewSessionView.swift in Sources */,
 				47F61BB641C75452FB2485E7 /* ParkingNotificationService.swift in Sources */,
 				CC7876470D569BD35F24E452 /* ParkingReminderActivityAttributes.swift in Sources */,
@@ -723,11 +727,12 @@
 				INFOPLIST_KEY_LSApplicationQueriesSchemes = (
 					comgooglemaps,
 				);
-				INFOPLIST_KEY_NSLocationUsageDescription = "Smart Parking Reminder can optionally capture your current location to save with a parking session.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Smart Parking Reminder can optionally capture your current location to save with a parking session.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIBackgroundModes = (
-				);
+					INFOPLIST_KEY_NSLocationUsageDescription = "Smart Parking Reminder can optionally capture your current location to save with a parking session.";
+					INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Smart Parking Reminder can optionally capture your current location to save with a parking session.";
+					INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+					INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+					INFOPLIST_KEY_UIBackgroundModes = (
+					);
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -782,11 +787,12 @@
 				INFOPLIST_KEY_LSApplicationQueriesSchemes = (
 					comgooglemaps,
 				);
-				INFOPLIST_KEY_NSLocationUsageDescription = "Smart Parking Reminder can optionally capture your current location to save with a parking session.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Smart Parking Reminder can optionally capture your current location to save with a parking session.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIBackgroundModes = (
-				);
+					INFOPLIST_KEY_NSLocationUsageDescription = "Smart Parking Reminder can optionally capture your current location to save with a parking session.";
+					INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Smart Parking Reminder can optionally capture your current location to save with a parking session.";
+					INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+					INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+					INFOPLIST_KEY_UIBackgroundModes = (
+					);
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

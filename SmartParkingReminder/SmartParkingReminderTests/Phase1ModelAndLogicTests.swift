@@ -179,6 +179,193 @@ final class Phase1ModelAndLogicTests: XCTestCase {
         XCTAssertEqual(session.historyOverdueLine(now: start.addingTimeInterval(240)), "Overdue by 1m 51s")
     }
 
+    @MainActor
+    func test_Phase2HistoryMapSearch_UsesInjectedProviderAndFiltersNearbyHistory() async throws {
+        let provider = FakeMapSearchProvider(results: [
+            HistoryMapSearchResult(
+                title: "Toronto City Hall",
+                subtitle: "100 Queen St W",
+                coordinate: CLLocationCoordinate2D(latitude: 43.6532, longitude: -79.3832)
+            )
+        ])
+        let vm = HistoryMapViewModel(searchProvider: provider)
+
+        let start = ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!
+        let near = ParkingSession(
+            locationName: "Near City Hall",
+            latitude: 43.65321,
+            longitude: -79.38321,
+            startTime: start,
+            expectedEndTime: start.addingTimeInterval(60),
+            actualEndTime: start.addingTimeInterval(50),
+            note: "",
+            persistedStatus: .completed
+        )
+        let far = ParkingSession(
+            locationName: "Far Garage",
+            latitude: 43.7000,
+            longitude: -79.4200,
+            startTime: start,
+            expectedEndTime: start.addingTimeInterval(60),
+            actualEndTime: start.addingTimeInterval(50),
+            note: "",
+            persistedStatus: .completed
+        )
+
+        vm.updateSessions([near, far])
+        vm.searchText = "city hall"
+
+        let results = await vm.searchAddressResults()
+        vm.selectSearchResult(try XCTUnwrap(results.first))
+
+        XCTAssertEqual(provider.queries, ["city hall"])
+        XCTAssertEqual(results.first?.title, "Toronto City Hall")
+        XCTAssertEqual(vm.visibleGroups.count, 1)
+        XCTAssertEqual(vm.visibleGroups.first?.name, "Near City Hall")
+        XCTAssertEqual(vm.statusText, "1 saved parking spot within 1 km of Toronto City Hall.")
+    }
+
+    @MainActor
+    func test_Phase2HistoryMapSearch_SearchFailureKeepsHistoryVisible() async throws {
+        let provider = FakeMapSearchProvider(error: TestSearchError.failed)
+        let vm = HistoryMapViewModel(searchProvider: provider)
+
+        let start = ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!
+        let session = ParkingSession(
+            locationName: "Saved Spot",
+            latitude: 43.6532,
+            longitude: -79.3832,
+            startTime: start,
+            expectedEndTime: start.addingTimeInterval(60),
+            actualEndTime: start.addingTimeInterval(50),
+            note: "",
+            persistedStatus: .completed
+        )
+
+        vm.updateSessions([session])
+        vm.searchText = "bad address"
+
+        let results = await vm.searchAddressResults()
+
+        XCTAssertTrue(results.isEmpty)
+        XCTAssertEqual(provider.queries, ["bad address"])
+        XCTAssertEqual(vm.visibleGroups.count, 1)
+        XCTAssertEqual(vm.statusText, "Could not search that address. Check the spelling or try a nearby landmark.")
+    }
+
+    @MainActor
+    func test_Phase2HistoryMapSearch_LocalQueryFiltersSavedSpotNamesAndNotes() throws {
+        let provider = FakeMapSearchProvider()
+        let vm = HistoryMapViewModel(searchProvider: provider)
+
+        let start = ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!
+        let work = ParkingSession(
+            locationName: "Work Garage",
+            latitude: 43.6532,
+            longitude: -79.3832,
+            startTime: start,
+            expectedEndTime: start.addingTimeInterval(60),
+            actualEndTime: start.addingTimeInterval(50),
+            note: "blue pillar",
+            persistedStatus: .completed
+        )
+        let home = ParkingSession(
+            locationName: "Home Street",
+            latitude: 43.7000,
+            longitude: -79.4200,
+            startTime: start,
+            expectedEndTime: start.addingTimeInterval(60),
+            actualEndTime: start.addingTimeInterval(50),
+            note: "near mailbox",
+            persistedStatus: .completed
+        )
+
+        vm.updateSessions([work, home])
+        vm.updateSearchText("pillar")
+
+        XCTAssertEqual(provider.queries, [])
+        XCTAssertEqual(vm.visibleGroups.count, 1)
+        XCTAssertEqual(vm.visibleGroups.first?.name, "Work Garage")
+        XCTAssertEqual(vm.statusText, "1 saved parking spot matching \"pillar\".")
+    }
+
+    @MainActor
+    func test_Phase2HistoryMapSearch_NoAddressResultKeepsLocalHistoryMatches() async throws {
+        let provider = FakeMapSearchProvider(results: [])
+        let vm = HistoryMapViewModel(searchProvider: provider)
+
+        let start = ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!
+        let session = ParkingSession(
+            locationName: "Work Garage",
+            latitude: 43.6532,
+            longitude: -79.3832,
+            startTime: start,
+            expectedEndTime: start.addingTimeInterval(60),
+            actualEndTime: start.addingTimeInterval(50),
+            note: "blue pillar",
+            persistedStatus: .completed
+        )
+
+        vm.updateSessions([session])
+        vm.updateSearchText("pillar")
+
+        let results = await vm.searchAddressResults()
+
+        XCTAssertTrue(results.isEmpty)
+        XCTAssertEqual(provider.queries, ["pillar"])
+        XCTAssertEqual(vm.visibleGroups.count, 1)
+        XCTAssertEqual(vm.visibleGroups.first?.name, "Work Garage")
+        XCTAssertEqual(vm.statusText, "No address found for \"pillar\". Showing saved history matches.")
+    }
+
+    @MainActor
+    func test_Phase2HistoryMapSearch_AdjustingRadiusRecomputesNearbyHistory() async throws {
+        let provider = FakeMapSearchProvider(results: [
+            HistoryMapSearchResult(
+                title: "Toronto City Hall",
+                subtitle: "100 Queen St W",
+                coordinate: CLLocationCoordinate2D(latitude: 43.6532, longitude: -79.3832)
+            )
+        ])
+        let vm = HistoryMapViewModel(searchProvider: provider, initialSearchRadius: .meters500)
+
+        let start = ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!
+        let near = ParkingSession(
+            locationName: "Near City Hall",
+            latitude: 43.65321,
+            longitude: -79.38321,
+            startTime: start,
+            expectedEndTime: start.addingTimeInterval(60),
+            actualEndTime: start.addingTimeInterval(50),
+            note: "",
+            persistedStatus: .completed
+        )
+        let widerRadius = ParkingSession(
+            locationName: "Wider Radius Garage",
+            latitude: 43.6608,
+            longitude: -79.3832,
+            startTime: start,
+            expectedEndTime: start.addingTimeInterval(60),
+            actualEndTime: start.addingTimeInterval(50),
+            note: "",
+            persistedStatus: .completed
+        )
+
+        vm.updateSessions([near, widerRadius])
+        vm.searchText = "city hall"
+
+        let results = await vm.searchAddressResults()
+        vm.selectSearchResult(try XCTUnwrap(results.first))
+
+        XCTAssertEqual(vm.visibleGroups.map(\.name), ["Near City Hall"])
+        XCTAssertEqual(vm.statusText, "1 saved parking spot within 500 m of Toronto City Hall.")
+
+        vm.searchRadius = .twoKilometers
+
+        XCTAssertEqual(Set(vm.visibleGroups.map(\.name)), ["Near City Hall", "Wider Radius Garage"])
+        XCTAssertEqual(vm.statusText, "2 saved parking spots within 2 km of Toronto City Hall.")
+    }
+
     private func makeGroup(sessions: [ParkingSession]) -> ParkingSpotGroup {
         ParkingSpotGroup(
             id: "test-group",
@@ -186,5 +373,28 @@ final class Phase1ModelAndLogicTests: XCTestCase {
             name: "Test Group",
             sessions: sessions
         )
+    }
+}
+
+private enum TestSearchError: Error {
+    case failed
+}
+
+private final class FakeMapSearchProvider: MapSearchProviding {
+    private let results: [HistoryMapSearchResult]
+    private let error: Error?
+    private(set) var queries: [String] = []
+
+    init(results: [HistoryMapSearchResult] = [], error: Error? = nil) {
+        self.results = results
+        self.error = error
+    }
+
+    func searchAddress(query: String) async throws -> [HistoryMapSearchResult] {
+        queries.append(query)
+        if let error {
+            throw error
+        }
+        return results
     }
 }

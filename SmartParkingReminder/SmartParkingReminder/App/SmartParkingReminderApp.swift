@@ -5,32 +5,59 @@ struct SmartParkingReminderApp: App {
     @StateObject private var store: ParkingSessionStore
 
     init() {
+        let arguments = ProcessInfo.processInfo.arguments
+
         // UI tests should not be blocked by system permission prompts.
-        if ProcessInfo.processInfo.arguments.contains("UI_TESTING") {
+        #if DEBUG
+        if arguments.contains("UI_TESTING") {
             let filename = ProcessInfo.processInfo.environment["UITEST_STORAGE_FILE"] ?? "parking_sessions_uitest.json"
             let storage = ParkingSessionStorageService(filename: filename)
             let notifications = ParkingNotificationService(center: NoopUserNotificationCenter())
             _store = StateObject(wrappedValue: ParkingSessionStore(storage: storage, notifications: notifications))
-        } else {
+            return
+        } else if arguments.contains("LIVE_ACTIVITY_TESTING") {
+            let filename = ProcessInfo.processInfo.environment["LIVE_ACTIVITY_STORAGE_FILE"] ?? "parking_sessions_live_activity_test.json"
+            let storage = ParkingSessionStorageService(filename: filename)
+            let notifications = ParkingNotificationService(center: NoopUserNotificationCenter())
             let activityLifecycle: ParkingActivityLifecycleManaging
             if #available(iOS 16.2, *) {
-                activityLifecycle = ActivityKitParkingActivityLifecycleManager()
+                activityLifecycle = ActivityKitParkingActivityLifecycleManager(minimumUpdateInterval: 1)
             } else {
                 activityLifecycle = NoopParkingActivityLifecycleManager()
             }
-            _store = StateObject(wrappedValue: ParkingSessionStore(activityLifecycle: activityLifecycle))
+            _store = StateObject(wrappedValue: ParkingSessionStore(
+                storage: storage,
+                notifications: notifications,
+                activityLifecycle: activityLifecycle
+            ))
+            return
         }
+        #endif
+
+        let activityLifecycle: ParkingActivityLifecycleManaging
+        if #available(iOS 16.2, *) {
+            activityLifecycle = ActivityKitParkingActivityLifecycleManager()
+        } else {
+            activityLifecycle = NoopParkingActivityLifecycleManager()
+        }
+        _store = StateObject(wrappedValue: ParkingSessionStore(activityLifecycle: activityLifecycle))
     }
 
     var body: some Scene {
         WindowGroup {
-            if ProcessInfo.processInfo.arguments.contains("UI_TESTING") {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("UI_TESTING")
+                || ProcessInfo.processInfo.arguments.contains("LIVE_ACTIVITY_TESTING") {
                 ContentView(locationService: UITestLocationService())
                     .environmentObject(store)
             } else {
                 ContentView()
                     .environmentObject(store)
             }
+            #else
+            ContentView()
+                .environmentObject(store)
+            #endif
         }
     }
 }

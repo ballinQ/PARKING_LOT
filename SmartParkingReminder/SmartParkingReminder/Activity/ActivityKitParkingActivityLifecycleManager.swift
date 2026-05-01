@@ -62,8 +62,14 @@ final class ActivityKitParkingActivityLifecycleManager: ParkingActivityLifecycle
                 pushType: nil
             )
             recordPublished(snapshot)
+            #if DEBUG
+            print("Live Activity requested for session \(sessionID) with status \(snapshot.status.label)")
+            #endif
         } catch {
             // ActivityKit can be unavailable or disabled. Local notifications remain the fallback.
+            #if DEBUG
+            print("Live Activity request failed for session \(sessionID): \(error.localizedDescription)")
+            #endif
         }
     }
 
@@ -76,6 +82,9 @@ final class ActivityKitParkingActivityLifecycleManager: ParkingActivityLifecycle
             staleDate: snapshot.expectedEndTime.addingTimeInterval(60 * 60)
         )
         await activity.update(content)
+        #if DEBUG
+        print("Live Activity updated for session \(activity.attributes.sessionID) with status \(snapshot.status.label)")
+        #endif
     }
 
     private func endActivity(sessionID: String) async {
@@ -83,6 +92,9 @@ final class ActivityKitParkingActivityLifecycleManager: ParkingActivityLifecycle
         await existing.end(nil, dismissalPolicy: .immediate)
         lastUpdateBySessionID[sessionID] = nil
         lastStatusBySessionID[sessionID] = nil
+        #if DEBUG
+        print("Live Activity ended for session \(sessionID)")
+        #endif
     }
 
     private func activity(for sessionID: String) -> Activity<ParkingReminderActivityAttributes>? {
