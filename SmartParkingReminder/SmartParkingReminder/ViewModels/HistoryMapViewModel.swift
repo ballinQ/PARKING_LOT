@@ -32,6 +32,62 @@ enum HistorySearchRadius: String, CaseIterable, Identifiable, Equatable {
     }
 }
 
+enum HistorySpotMetadataFilter: String, CaseIterable, Identifiable, Equatable {
+    case all
+    case favorites
+    case fourPlus
+    case safe
+    case cheap
+    case covered
+    case street
+    case garage
+    case ev
+    case accessible
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .all:
+            return "All"
+        case .favorites:
+            return "Favorites"
+        case .fourPlus:
+            return "4+ Stars"
+        case .safe:
+            return "Safe"
+        case .cheap:
+            return "Cheap"
+        case .covered:
+            return "Covered"
+        case .street:
+            return "Street"
+        case .garage:
+            return "Garage"
+        case .ev:
+            return "EV"
+        case .accessible:
+            return "Accessible"
+        }
+    }
+
+    func matches(_ group: ParkingSpotGroup) -> Bool {
+        guard self != .all else { return true }
+        guard let metadata = group.metadata else { return false }
+
+        switch self {
+        case .all:
+            return true
+        case .favorites:
+            return metadata.isFavorite
+        case .fourPlus:
+            return (metadata.rating ?? 0) >= 4
+        case .safe, .cheap, .covered, .street, .garage, .ev, .accessible:
+            return metadata.tags.contains { $0.caseInsensitiveCompare(label) == .orderedSame }
+        }
+    }
+}
+
 @MainActor
 final class HistoryMapViewModel: ObservableObject {
     @Published private(set) var groups: [ParkingSpotGroup] = []
@@ -44,6 +100,15 @@ final class HistoryMapViewModel: ObservableObject {
         didSet {
             guard searchCenter != nil else { return }
             applySearchFilter(searchName: selectedSearchName)
+        }
+    }
+    @Published var metadataFilter: HistorySpotMetadataFilter = .all {
+        didSet {
+            applyCurrentHistoryFilter()
+            if let selectedGroupID,
+               !visibleGroups.contains(where: { $0.id == selectedGroupID }) {
+                clearSelection()
+            }
         }
     }
     @Published var isSearching = false
@@ -70,23 +135,28 @@ final class HistoryMapViewModel: ObservableObject {
 
     private let groupingService: ParkingSpotGroupingService
     private let searchProvider: MapSearchProviding
+    private let metadataStorage: SavedParkingSpotMetadataStorageServiceProtocol
+    private var metadataBySpotID: [String: SavedParkingSpotMetadata] = [:]
     private var selectedSearchName: String? = nil
 
     init(
         groupingService: ParkingSpotGroupingService = ParkingSpotGroupingService(thresholdMeters: 30),
         searchProvider: MapSearchProviding = MapKitSearchProvider(),
+        metadataStorage: SavedParkingSpotMetadataStorageServiceProtocol = SavedParkingSpotMetadataStorageService(),
         initialSearchRadius: HistorySearchRadius = .oneKilometer
     ) {
         self.groupingService = groupingService
         self.searchProvider = searchProvider
+        self.metadataStorage = metadataStorage
         self.searchRadius = initialSearchRadius
+        self.metadataBySpotID = (try? metadataStorage.load()) ?? [:]
     }
 
     func updateSessions(_ sessions: [ParkingSession]) {
         // Preserve current selection by id when possible.
         let currentID = selectedGroupID
 
-        groups = groupingService.groupSessions(sessions)
+        groups = groupingService.groupSessions(sessions).map(applyingMetadata)
         applyCurrentHistoryFilter()
 
         if let currentID {
@@ -111,6 +181,30 @@ final class HistoryMapViewModel: ObservableObject {
     func clearSelection() {
         selectedGroup = nil
         selectedGroupID = nil
+    }
+
+    func metadata(for group: ParkingSpotGroup) -> SavedParkingSpotMetadata {
+        metadataBySpotID[group.id]
+        ?? SavedParkingSpotMetadata(spotID: group.id)
+    }
+
+    func updateMetadata(_ metadata: SavedParkingSpotMetadata, for group: ParkingSpotGroup) {
+        var next = metadata
+        next.updatedAt = now()
+        metadataBySpotID[group.id] = next
+
+        do {
+            try metadataStorage.save(metadataBySpotID)
+        } catch {
+            // Phase 2 local metadata is best-effort; keep the in-memory edit visible.
+        }
+
+        groups = groups.map { $0.id == group.id ? $0.withMetadata(next) : $0 }
+        applyCurrentHistoryFilter()
+
+        if selectedGroup?.id == group.id {
+            selectedGroup = selectedGroup?.withMetadata(next)
+        }
     }
 
     func updateSearchText(_ text: String) {
@@ -164,7 +258,7 @@ final class HistoryMapViewModel: ObservableObject {
             searchCenter = nil
             selectedSearchName = nil
             statusText = nil
-            visibleGroups = groups
+            visibleGroups = applyMetadataFilter(to: groups)
             return []
         }
 
@@ -195,7 +289,7 @@ final class HistoryMapViewModel: ObservableObject {
             selectedSearchName = nil
             applyLocalHistoryFilter(query: query)
             if visibleGroups.isEmpty {
-                visibleGroups = groups
+                visibleGroups = applyMetadataFilter(to: groups)
                 statusText = "Could not search that address. Check the spelling or try a nearby landmark."
             } else {
                 statusText = "Could not search that address. Showing saved history matches."
@@ -210,7 +304,7 @@ final class HistoryMapViewModel: ObservableObject {
         searchCenter = nil
         selectedSearchName = nil
         statusText = nil
-        visibleGroups = groups
+        visibleGroups = applyMetadataFilter(to: groups)
         clearSelection()
     }
 
@@ -222,51 +316,83 @@ final class HistoryMapViewModel: ObservableObject {
         }
     }
 
+    private func applyingMetadata(to group: ParkingSpotGroup) -> ParkingSpotGroup {
+        group.withMetadata(metadataBySpotID[group.id])
+    }
+
+    private func now() -> Date {
+        Date()
+    }
+
     private func applyLocalHistoryFilter(query: String) {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedQuery.isEmpty else {
-            visibleGroups = groups
+            visibleGroups = applyMetadataFilter(to: groups)
             if searchCenter == nil {
-                statusText = nil
+                statusText = metadataFilter == .all
+                    ? nil
+                    : filterStatusText(count: visibleGroups.count)
             }
             return
         }
 
-        visibleGroups = groups.filter { group in
+        let matchingGroups = groups.filter { group in
             group.matchesLocalHistorySearch(trimmedQuery)
         }
+        visibleGroups = applyMetadataFilter(to: matchingGroups)
 
         if visibleGroups.isEmpty {
             statusText = "No saved parking history matching \"\(trimmedQuery)\". Search an address to check nearby saved spots."
         } else {
-            statusText = "\(visibleGroups.count) saved parking spot\(visibleGroups.count == 1 ? "" : "s") matching \"\(trimmedQuery)\"."
+            statusText = "\(visibleGroups.count) saved parking spot\(visibleGroups.count == 1 ? "" : "s") matching \"\(trimmedQuery)\"\(metadataFilterSuffix)."
         }
     }
 
     private func applySearchFilter(searchName: String? = nil) {
         guard let searchCenter else {
-            visibleGroups = groups
+            visibleGroups = applyMetadataFilter(to: groups)
             return
         }
 
         let centerLocation = CLLocation(latitude: searchCenter.latitude, longitude: searchCenter.longitude)
-        visibleGroups = groups.filter { group in
+        let nearbyGroups = groups.filter { group in
             let groupLocation = CLLocation(latitude: group.coordinate.latitude, longitude: group.coordinate.longitude)
             return centerLocation.distance(from: groupLocation) <= searchRadius.distance
         }
+        visibleGroups = applyMetadataFilter(to: nearbyGroups)
 
         let place = searchName ?? "this address"
         if visibleGroups.isEmpty {
-            statusText = "No saved parking history within \(searchRadius.label) of \(place)."
+            statusText = "No saved parking history\(metadataFilterSuffix) within \(searchRadius.label) of \(place)."
         } else {
-            statusText = "\(visibleGroups.count) saved parking spot\(visibleGroups.count == 1 ? "" : "s") within \(searchRadius.label) of \(place)."
+            statusText = "\(visibleGroups.count) saved parking spot\(visibleGroups.count == 1 ? "" : "s")\(metadataFilterSuffix) within \(searchRadius.label) of \(place)."
         }
+    }
+
+    private func applyMetadataFilter(to groups: [ParkingSpotGroup]) -> [ParkingSpotGroup] {
+        groups.filter { metadataFilter.matches($0) }
+    }
+
+    private var metadataFilterSuffix: String {
+        metadataFilter == .all ? "" : " matching \(metadataFilter.label)"
+    }
+
+    private func filterStatusText(count: Int) -> String {
+        guard metadataFilter != .all else { return "" }
+        if count == 0 {
+            return "No saved parking spots matching \(metadataFilter.label)."
+        }
+        return "\(count) saved parking spot\(count == 1 ? "" : "s") matching \(metadataFilter.label)."
     }
 }
 
 private extension ParkingSpotGroup {
     func matchesLocalHistorySearch(_ query: String) -> Bool {
-        if name.localizedCaseInsensitiveContains(query) {
+        if displayName.localizedCaseInsensitiveContains(query) || name.localizedCaseInsensitiveContains(query) {
+            return true
+        }
+
+        if metadata?.matchesSearch(query) == true {
             return true
         }
 

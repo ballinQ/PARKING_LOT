@@ -65,3 +65,62 @@ private struct ParkingSessionStorageEnvelope: Codable {
 enum ParkingSessionStorageError: Error, Equatable {
     case unsupportedSchemaVersion(Int)
 }
+
+protocol SavedParkingSpotMetadataStorageServiceProtocol {
+    func load() throws -> [String: SavedParkingSpotMetadata]
+    func save(_ metadataBySpotID: [String: SavedParkingSpotMetadata]) throws
+}
+
+final class SavedParkingSpotMetadataStorageService: SavedParkingSpotMetadataStorageServiceProtocol {
+    static let currentSchemaVersion = 1
+
+    private let fileURL: URL
+
+    init(filename: String = "saved_spot_metadata.json") {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        self.fileURL = documents.appendingPathComponent(filename)
+    }
+
+    /// Test-friendly initializer.
+    init(fileURL: URL) {
+        self.fileURL = fileURL
+    }
+
+    func load() throws -> [String: SavedParkingSpotMetadata] {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            return [:]
+        }
+
+        let data = try Data(contentsOf: fileURL)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let envelope = try decoder.decode(SavedParkingSpotMetadataStorageEnvelope.self, from: data)
+        guard envelope.schemaVersion <= Self.currentSchemaVersion else {
+            throw ParkingSessionStorageError.unsupportedSchemaVersion(envelope.schemaVersion)
+        }
+
+        return Dictionary(uniqueKeysWithValues: envelope.spots.map { ($0.spotID, $0) })
+    }
+
+    func save(_ metadataBySpotID: [String: SavedParkingSpotMetadata]) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        let envelope = SavedParkingSpotMetadataStorageEnvelope(
+            schemaVersion: Self.currentSchemaVersion,
+            savedAt: Date(),
+            spots: metadataBySpotID.values.sorted { $0.spotID < $1.spotID }
+        )
+        let data = try encoder.encode(envelope)
+        let directory = fileURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try data.write(to: fileURL, options: [.atomic])
+    }
+}
+
+private struct SavedParkingSpotMetadataStorageEnvelope: Codable {
+    let schemaVersion: Int
+    let savedAt: Date
+    let spots: [SavedParkingSpotMetadata]
+}

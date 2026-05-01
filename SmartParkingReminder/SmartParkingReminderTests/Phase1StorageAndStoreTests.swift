@@ -40,6 +40,30 @@ final class Phase1StorageAndStoreTests: XCTestCase {
         }))
     }
 
+    func test_Phase2PersonalSpotMetadataStorage_RoundTripsLocalMetadata() throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("saved_spot_metadata_\(UUID().uuidString).json")
+
+        let storage = SavedParkingSpotMetadataStorageService(fileURL: tmp)
+        let createdAt = ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!
+        let metadata = SavedParkingSpotMetadata(
+            spotID: "spot_test",
+            displayName: "Work Garage",
+            note: "level two",
+            rating: 5,
+            tags: ["Safe", "Covered"],
+            isFavorite: true,
+            createdAt: createdAt,
+            updatedAt: createdAt
+        )
+
+        try storage.save([metadata.spotID: metadata])
+
+        let restored = try storage.load()
+
+        XCTAssertEqual(restored[metadata.spotID], metadata)
+    }
+
     func test_Phase2Countdown_FutureEndTimeShowsRemaining() async throws {
         let storage = InMemoryStorage()
         let notifications = RecordingNotificationService()

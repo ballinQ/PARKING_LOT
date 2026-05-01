@@ -273,6 +273,26 @@ Manual verification still needed:
 - Saved the Live Activity verification report and evidence under `Self_report/phase2/runs/20260430_152900_live_activity_verification/`.
 - Debug build-for-testing and Release simulator build both passed after the verification hook cleanup.
 - Phase 2 progress estimate after Live Activity lifecycle verification: about 71% complete.
+- Fixed Dynamic Island / Live Activity timer text so it uses SwiftUI live timer rendering instead of a frozen `timeText` string from the ActivityKit payload.
+- Countdown and overdue views now render from `expectedEndTime`, allowing the system Live Activity UI to tick while the app is not foregrounded.
+- Added defensive date-range clamping around the widget timer text to avoid invalid ranges at the scheduled end boundary.
+- Build verification passed after the Dynamic Island timer fix on iPhone 17 Pro Simulator.
+- Reduced Dynamic Island information density after the live timer fix made the Island reserve too much space.
+- Compact Island now shows only the parking icon and a short live timer; no location/status text is shown in Dynamic Island.
+- Interim expanded Island density was reduced before the final icon-plus-timer direction below removed Dynamic Island text entirely.
+- Build verification passed after the compact Dynamic Island layout fix on iPhone 17 Pro Simulator.
+- Fixed a stale Dynamic Island status-color issue where the parking `P` icon stayed on the old color until the app reopened.
+- Live Activity visible status/color now derives from `expectedEndTime` inside the widget using a periodic timeline, so `Remaining`, `Due Soon`, and `Overdue` presentation can update without waiting for the app store to publish a new ActivityKit state.
+- Build verification passed after the Dynamic Island status-color fix on iPhone 17 Pro Simulator.
+- Final Dynamic Island direction for this slice: icon plus live timer only. The detailed label/location/status text remains on the Lock Screen Live Activity, not in Dynamic Island.
+- Tightened the Dynamic Island footprint by reducing the icon font size and timer frame width; iOS still controls the final minimum capsule size.
+- Started the next Phase 2 feature: local-only personal spot metadata inside the existing Map detail sheet.
+- Added saved spot metadata for favorite, 1-5 rating, local tags, and a spot-level note without adding backend, cloud, ML, analytics, or an old History list.
+- Personal metadata persists in a separate local JSON envelope, is attached to map spot groups by stable spot ID, and is included in local Map search matching.
+- Added focused unit coverage for metadata storage round-trip, metadata-backed search, and selection staying visible after metadata edits.
+- Continued the personal metadata slice with local Map filter chips for All, Favorites, 4+ Stars, and supported tags.
+- Metadata filters compose with address radius search and local saved-history search, while keeping markers/results inside the Map bottom-sheet workflow.
+- Added focused unit coverage for favorite-only filtering and metadata filters combined with nearby address radius filtering.
 
 ## Testing
 
@@ -344,6 +364,60 @@ Latest Phase 2 Live Activity lifecycle verification:
 - Result: ActivityKit request, create, update, end, dismiss, and removal lifecycle verified by simulator logs.
 - Remaining manual gap: final visual Lock Screen and Dynamic Island screenshot/video capture on supported device or simulator.
 
+Latest Phase 2 Dynamic Island timer fix check:
+
+- Changed `ParkingReminderLiveActivityWidget` from static `context.state.timeText` rendering to live SwiftUI `Text(timerInterval:countsDown:)` rendering.
+- Command: `xcodebuild build-for-testing -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/SmartParkingReminderDynamicIslandTimerFix`
+- Result: `** TEST BUILD SUCCEEDED **`
+
+Latest Phase 2 compact Dynamic Island layout check:
+
+- Reduced compact and expanded Dynamic Island content so the Island stays glanceable instead of using Lock Screen-level detail.
+- Command: `xcodebuild build-for-testing -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/SmartParkingReminderDynamicIslandCompactFix`
+- Result: `** TEST BUILD SUCCEEDED **`
+
+Latest Phase 2 Dynamic Island status-color fix check:
+
+- Changed Dynamic Island and Lock Screen visible status/color from stored ActivityKit status only to a time-derived status based on `expectedEndTime`.
+- Command: `xcodebuild build-for-testing -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/SmartParkingReminderDynamicIslandStatusColorFix`
+- Result: `** TEST BUILD SUCCEEDED **`
+
+Latest Phase 2 Dynamic Island icon-plus-timer check:
+
+- Removed Dynamic Island label/location/status text while preserving the colored parking icon and live timer.
+- Command: `xcodebuild build-for-testing -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/SmartParkingReminderDynamicIslandIconTimerFix`
+- Result: `** TEST BUILD SUCCEEDED **`
+
+Latest Phase 2 Dynamic Island smaller-footprint check:
+
+- Reduced Dynamic Island icon sizing and capped the timer frame more tightly while keeping icon plus timer visible.
+- Command: `xcodebuild build-for-testing -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/SmartParkingReminderDynamicIslandSmallFootprintFix`
+- Result: `** TEST BUILD SUCCEEDED **`
+
+Latest Phase 2 personal spot metadata focused check:
+
+- Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:SmartParkingReminderTests/Phase1ModelAndLogicTests/test_Phase2PersonalSpotMetadata_LocalQueryFiltersTagsAndSpotNote -only-testing:SmartParkingReminderTests/Phase1ModelAndLogicTests/test_Phase2PersonalSpotMetadata_UpdatePersistsAndKeepsSelectionVisible -only-testing:SmartParkingReminderTests/Phase1StorageAndStoreTests/test_Phase2PersonalSpotMetadataStorage_RoundTripsLocalMetadata -derivedDataPath /tmp/SmartParkingReminderPersonalSpotMetadataTests2`
+- Result: `** TEST SUCCEEDED **`
+- Unit tests: 3 passed, 0 failed.
+
+Latest Phase 2 full unit check after personal spot metadata:
+
+- Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:SmartParkingReminderTests -derivedDataPath /tmp/SmartParkingReminderPersonalSpotMetadataUnitTests`
+- Result: `** TEST SUCCEEDED **`
+- Unit tests: 37 passed, 0 failed.
+
+Latest Phase 2 focused personal metadata filter check:
+
+- Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:SmartParkingReminderTests/Phase1ModelAndLogicTests/test_Phase2PersonalSpotMetadataFilter_FavoritesFiltersVisibleMapGroups -only-testing:SmartParkingReminderTests/Phase1ModelAndLogicTests/test_Phase2PersonalSpotMetadataFilter_ComposesWithAddressRadius -derivedDataPath /tmp/SmartParkingReminderMetadataFilterTests`
+- Result: `** TEST SUCCEEDED **`
+- Unit tests: 2 passed, 0 failed.
+
+Latest Phase 2 full unit check after personal metadata filters:
+
+- Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:SmartParkingReminderTests -derivedDataPath /tmp/SmartParkingReminderMetadataFilterUnitTests`
+- Result: `** TEST SUCCEEDED **`
+- Unit tests: 39 passed, 0 failed.
+
 Latest Phase 2 focused active-session UI check:
 
 - Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:SmartParkingReminderUITests/Phase1UITests/test_Phase2ActiveSession_DueSoonStateIsVisible -only-testing:SmartParkingReminderUITests/Phase1UITests/test_Phase2ActiveSession_OverdueStateIsVisibleWithoutAutoEnding -derivedDataPath /tmp/SmartParkingReminderActiveSessionUITests`
@@ -399,12 +473,14 @@ Important current test mapping:
 - Prefer `build-for-testing` locally; ask Clawdbot to run full simulator tests.
 - Live Activity now has a first ActivityKit/widget implementation, the required app `NSSupportsLiveActivities` declaration, and simulator lifecycle evidence. Device/simulator visual verification is still needed for final Lock Screen and Dynamic Island presentation evidence.
 - Quick Start now has a first local-only implementation. Keep future polish on the same `ParkingSessionDraft` / store creation path.
+- Personal spot metadata now has a first local-only Map-detail implementation plus local Map filter chips. Keep future polish inside the map workflow and avoid reviving the old History list.
+- Toronto Green P is a future nearby parking discovery track: Phase 2 is research and optional disabled/static marker prototype only; Phase 3 is the earliest production Green P data layer; Phase 4 is real-time availability/payment/deeper integration only with an official API or partnership.
 
 ## Next Good Improvements
 
 - Tag/freeze the Phase 1 baseline before Phase 2 code work.
 - Capture final visual Live Activity presentation on a supported simulator/device and attach evidence to the latest Phase 2 report folder.
-- Next implementation slice should be personal spot metadata groundwork; keep it local-only and do not add backend/cloud/ML/community features.
+- Run a managed Phase 2 checkpoint after visual review of personal spot metadata and remaining Live Activity evidence.
 
 ## Phase 2 Direction
 
@@ -420,5 +496,5 @@ Recommended order:
 6. Real ActivityKit-backed Live Activity manager and widget extension.
 7. Quick Start on the same session creation path.
 8. Map-only search/filtering improvements.
-9. Personal spot metadata after storage versioning is stable.
-10. Nearby parking discovery research only.
+9. Personal spot metadata after storage versioning is stable. First pass done.
+10. Toronto Green P / nearby parking discovery research only. Static prototype can be considered in Phase 2 only if official data is reliable; production data layer waits for Phase 3; real-time availability/payment waits for Phase 4 and official API/partnership.

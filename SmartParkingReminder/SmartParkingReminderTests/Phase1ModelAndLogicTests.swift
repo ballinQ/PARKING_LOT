@@ -290,6 +290,175 @@ final class Phase1ModelAndLogicTests: XCTestCase {
     }
 
     @MainActor
+    func test_Phase2PersonalSpotMetadata_LocalQueryFiltersTagsAndSpotNote() throws {
+        let provider = FakeMapSearchProvider()
+        let metadataStorage = InMemorySpotMetadataStorage()
+        let vm = HistoryMapViewModel(searchProvider: provider, metadataStorage: metadataStorage)
+
+        let start = ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!
+        let session = ParkingSession(
+            locationName: "Office Garage",
+            latitude: 43.6532,
+            longitude: -79.3832,
+            startTime: start,
+            expectedEndTime: start.addingTimeInterval(60),
+            actualEndTime: start.addingTimeInterval(50),
+            note: "",
+            persistedStatus: .completed
+        )
+
+        vm.updateSessions([session])
+        let group = try XCTUnwrap(vm.visibleGroups.first)
+        vm.updateMetadata(
+            SavedParkingSpotMetadata(
+                spotID: group.id,
+                note: "level two by elevator",
+                rating: 4,
+                tags: ["Covered"],
+                isFavorite: true
+            ),
+            for: group
+        )
+
+        vm.updateSearchText("covered")
+
+        XCTAssertEqual(provider.queries, [])
+        XCTAssertEqual(vm.visibleGroups.count, 1)
+        XCTAssertEqual(vm.visibleGroups.first?.metadata?.tags, ["Covered"])
+        XCTAssertEqual(vm.statusText, "1 saved parking spot matching \"covered\".")
+
+        vm.updateSearchText("elevator")
+
+        XCTAssertEqual(vm.visibleGroups.count, 1)
+        XCTAssertEqual(vm.visibleGroups.first?.metadata?.note, "level two by elevator")
+    }
+
+    @MainActor
+    func test_Phase2PersonalSpotMetadata_UpdatePersistsAndKeepsSelectionVisible() throws {
+        let metadataStorage = InMemorySpotMetadataStorage()
+        let vm = HistoryMapViewModel(searchProvider: FakeMapSearchProvider(), metadataStorage: metadataStorage)
+
+        let start = ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!
+        let session = ParkingSession(
+            locationName: "Saved Garage",
+            latitude: 43.6532,
+            longitude: -79.3832,
+            startTime: start,
+            expectedEndTime: start.addingTimeInterval(60),
+            actualEndTime: start.addingTimeInterval(50),
+            note: "",
+            persistedStatus: .completed
+        )
+
+        vm.updateSessions([session])
+        let group = try XCTUnwrap(vm.visibleGroups.first)
+        vm.selectGroup(group)
+
+        let metadata = SavedParkingSpotMetadata(
+            spotID: group.id,
+            note: "best entrance on Bay",
+            rating: 5,
+            tags: ["Safe"],
+            isFavorite: true
+        )
+        vm.updateMetadata(metadata, for: group)
+
+        XCTAssertEqual(metadataStorage.savedMetadata[group.id]?.note, "best entrance on Bay")
+        XCTAssertEqual(vm.selectedGroup?.metadata?.rating, 5)
+        XCTAssertEqual(vm.visibleGroups.first?.metadata?.isFavorite, true)
+    }
+
+    @MainActor
+    func test_Phase2PersonalSpotMetadataFilter_FavoritesFiltersVisibleMapGroups() throws {
+        let vm = HistoryMapViewModel(searchProvider: FakeMapSearchProvider(), metadataStorage: InMemorySpotMetadataStorage())
+        let start = ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!
+        let favorite = ParkingSession(
+            locationName: "Favorite Garage",
+            latitude: 43.6532,
+            longitude: -79.3832,
+            startTime: start,
+            expectedEndTime: start.addingTimeInterval(60),
+            actualEndTime: start.addingTimeInterval(50),
+            note: "",
+            persistedStatus: .completed
+        )
+        let regular = ParkingSession(
+            locationName: "Regular Street",
+            latitude: 43.7000,
+            longitude: -79.4200,
+            startTime: start,
+            expectedEndTime: start.addingTimeInterval(60),
+            actualEndTime: start.addingTimeInterval(50),
+            note: "",
+            persistedStatus: .completed
+        )
+
+        vm.updateSessions([favorite, regular])
+        let favoriteGroup = try XCTUnwrap(vm.visibleGroups.first(where: { $0.name == "Favorite Garage" }))
+        vm.updateMetadata(
+            SavedParkingSpotMetadata(spotID: favoriteGroup.id, isFavorite: true),
+            for: favoriteGroup
+        )
+
+        vm.metadataFilter = .favorites
+
+        XCTAssertEqual(vm.visibleGroups.map(\.name), ["Favorite Garage"])
+        XCTAssertEqual(vm.statusText, "1 saved parking spot matching Favorites.")
+    }
+
+    @MainActor
+    func test_Phase2PersonalSpotMetadataFilter_ComposesWithAddressRadius() async throws {
+        let provider = FakeMapSearchProvider(results: [
+            HistoryMapSearchResult(
+                title: "Toronto City Hall",
+                subtitle: "100 Queen St W",
+                coordinate: CLLocationCoordinate2D(latitude: 43.6532, longitude: -79.3832)
+            )
+        ])
+        let vm = HistoryMapViewModel(
+            searchProvider: provider,
+            metadataStorage: InMemorySpotMetadataStorage(),
+            initialSearchRadius: .twoKilometers
+        )
+        let start = ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!
+        let coveredNear = ParkingSession(
+            locationName: "Covered Near",
+            latitude: 43.65321,
+            longitude: -79.38321,
+            startTime: start,
+            expectedEndTime: start.addingTimeInterval(60),
+            actualEndTime: start.addingTimeInterval(50),
+            note: "",
+            persistedStatus: .completed
+        )
+        let streetNear = ParkingSession(
+            locationName: "Street Near",
+            latitude: 43.6540,
+            longitude: -79.3832,
+            startTime: start,
+            expectedEndTime: start.addingTimeInterval(60),
+            actualEndTime: start.addingTimeInterval(50),
+            note: "",
+            persistedStatus: .completed
+        )
+
+        vm.updateSessions([coveredNear, streetNear])
+        let coveredGroup = try XCTUnwrap(vm.visibleGroups.first(where: { $0.name == "Covered Near" }))
+        vm.updateMetadata(
+            SavedParkingSpotMetadata(spotID: coveredGroup.id, tags: ["Covered"]),
+            for: coveredGroup
+        )
+        vm.searchText = "city hall"
+        let results = await vm.searchAddressResults()
+        vm.selectSearchResult(try XCTUnwrap(results.first))
+
+        vm.metadataFilter = .covered
+
+        XCTAssertEqual(vm.visibleGroups.map(\.name), ["Covered Near"])
+        XCTAssertEqual(vm.statusText, "1 saved parking spot matching Covered within 2 km of Toronto City Hall.")
+    }
+
+    @MainActor
     func test_Phase2HistoryMapSearch_NoAddressResultKeepsLocalHistoryMatches() async throws {
         let provider = FakeMapSearchProvider(results: [])
         let vm = HistoryMapViewModel(searchProvider: provider)
@@ -396,5 +565,21 @@ private final class FakeMapSearchProvider: MapSearchProviding {
             throw error
         }
         return results
+    }
+}
+
+private final class InMemorySpotMetadataStorage: SavedParkingSpotMetadataStorageServiceProtocol {
+    var savedMetadata: [String: SavedParkingSpotMetadata]
+
+    init(savedMetadata: [String: SavedParkingSpotMetadata] = [:]) {
+        self.savedMetadata = savedMetadata
+    }
+
+    func load() throws -> [String: SavedParkingSpotMetadata] {
+        savedMetadata
+    }
+
+    func save(_ metadataBySpotID: [String: SavedParkingSpotMetadata]) throws {
+        savedMetadata = metadataBySpotID
     }
 }

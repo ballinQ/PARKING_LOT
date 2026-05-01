@@ -2,9 +2,11 @@ import SwiftUI
 
 struct ParkingSpotDetailSheetView: View {
     let group: ParkingSpotGroup
+    let metadata: SavedParkingSpotMetadata
     let now: Date
 
     let onBack: () -> Void
+    let onMetadataChange: (SavedParkingSpotMetadata) -> Void
     let onOpenAppleMaps: () -> Void
     let onOpenGoogleMaps: () -> Void
 
@@ -22,7 +24,7 @@ struct ParkingSpotDetailSheetView: View {
             .accessibilityIdentifier(A11y.detailBackButton)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(group.name)
+                Text(group.displayName)
                     .accessibilityIdentifier(A11y.detailSpotName)
                     .font(.title3)
                     .fontWeight(.semibold)
@@ -39,6 +41,11 @@ struct ParkingSpotDetailSheetView: View {
             }
 
             StatusSummaryView(group: group, now: now)
+
+            PersonalSpotMetadataView(
+                metadata: metadata,
+                onMetadataChange: onMetadataChange
+            )
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("Recent sessions")
@@ -107,6 +114,118 @@ struct ParkingSpotDetailSheetView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(A11y.detailSheet)
         .presentationDragIndicator(.visible)
+    }
+}
+
+private struct PersonalSpotMetadataView: View {
+    let metadata: SavedParkingSpotMetadata
+    let onMetadataChange: (SavedParkingSpotMetadata) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Personal details")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    update { $0.isFavorite.toggle() }
+                } label: {
+                    Image(systemName: metadata.isFavorite ? "heart.fill" : "heart")
+                        .foregroundStyle(metadata.isFavorite ? .red : .secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(metadata.isFavorite ? "Remove favorite" : "Mark favorite")
+                .accessibilityIdentifier(A11y.detailFavoriteButton)
+            }
+
+            HStack(spacing: 4) {
+                ForEach(1...5, id: \.self) { value in
+                    Button {
+                        update {
+                            $0.rating = metadata.rating == value ? nil : value
+                        }
+                    } label: {
+                        Image(systemName: (metadata.rating ?? 0) >= value ? "star.fill" : "star")
+                            .font(.caption)
+                            .foregroundStyle((metadata.rating ?? 0) >= value ? .yellow : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Rating \(value)")
+                    .accessibilityIdentifier("\(A11y.detailRatingPrefix).\(value)")
+                }
+
+                Spacer()
+            }
+
+            tagChips
+
+            TextField(
+                "Spot note",
+                text: Binding(
+                    get: { metadata.note },
+                    set: { note in
+                        update { $0.note = note }
+                    }
+                ),
+                axis: .vertical
+            )
+            .font(.footnote)
+            .lineLimit(2...4)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color(.secondarySystemFill))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .accessibilityIdentifier(A11y.detailSpotNoteField)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .background(Color(.tertiarySystemFill))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityIdentifier(A11y.detailPersonalMetadata)
+    }
+
+    private var tagChips: some View {
+        let columns = [
+            GridItem(.adaptive(minimum: 74), spacing: 6)
+        ]
+
+        return LazyVGrid(columns: columns, alignment: .leading, spacing: 6) {
+            ForEach(SavedParkingSpotMetadata.defaultTags, id: \.self) { tag in
+                Button {
+                    update { metadata in
+                        if metadata.tags.contains(tag) {
+                            metadata.tags.removeAll { $0 == tag }
+                        } else {
+                            metadata.tags.append(tag)
+                            metadata.tags.sort()
+                        }
+                    }
+                } label: {
+                    Text(tag)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .foregroundStyle(metadata.tags.contains(tag) ? .white : .primary)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(metadata.tags.contains(tag) ? Color.blue : Color(.secondarySystemFill))
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("\(A11y.detailTagPrefix).\(tag)")
+            }
+        }
+    }
+
+    private func update(_ mutate: (inout SavedParkingSpotMetadata) -> Void) {
+        var next = metadata
+        mutate(&next)
+        onMetadataChange(next)
     }
 }
 

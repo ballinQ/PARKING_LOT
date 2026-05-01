@@ -18,35 +18,33 @@ struct ParkingReminderLiveActivityWidget: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Label("Parking", systemImage: "parkingsign.circle.fill")
-                        .font(.headline)
+                    TimelineView(.periodic(from: .now, by: 15)) { timeline in
+                        let status = liveStatus(context: context, now: timeline.date)
+                        Image(systemName: "parkingsign.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(statusColor(status))
+                    }
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text(context.state.status.label)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(statusColor(context.state.status))
+                    liveIslandTimerView(context: context)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(context.attributes.locationName)
-                            .font(.caption)
-                            .lineLimit(1)
-                        Text(activityTimeText(context: context))
-                            .font(.title3.weight(.semibold))
-                            .monospacedDigit()
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    EmptyView()
                 }
             } compactLeading: {
-                Image(systemName: "parkingsign.circle.fill")
-                    .foregroundStyle(statusColor(context.state.status))
+                TimelineView(.periodic(from: .now, by: 15)) { timeline in
+                    Image(systemName: "parkingsign.circle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(statusColor(liveStatus(context: context, now: timeline.date)))
+                }
             } compactTrailing: {
-                Text(context.state.timeText)
-                    .font(.caption2.weight(.semibold))
-                    .monospacedDigit()
+                liveIslandTimerView(context: context)
             } minimal: {
-                Image(systemName: "parkingsign.circle.fill")
-                    .foregroundStyle(statusColor(context.state.status))
+                TimelineView(.periodic(from: .now, by: 15)) { timeline in
+                    Image(systemName: "parkingsign.circle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(statusColor(liveStatus(context: context, now: timeline.date)))
+                }
             }
         }
     }
@@ -56,34 +54,94 @@ private struct ParkingReminderLockScreenView: View {
     let context: ActivityViewContext<ParkingReminderActivityAttributes>
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Label("Parking", systemImage: "parkingsign.circle.fill")
-                    .font(.headline)
-                Spacer()
-                Text(context.state.status.label)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(statusColor(context.state.status))
+        TimelineView(.periodic(from: .now, by: 15)) { timeline in
+            let status = liveStatus(context: context, now: timeline.date)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    Label("Parking", systemImage: "parkingsign.circle.fill")
+                        .font(.headline)
+                    Spacer()
+                    Text(status.label)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(statusColor(status))
+                }
+
+                Text(context.attributes.locationName)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                activityTimeView(context: context, status: status, includesOverduePrefix: true)
+                    .font(.system(.title2, design: .rounded).weight(.bold))
+                    .monospacedDigit()
             }
-
-            Text(context.attributes.locationName)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-
-            Text(activityTimeText(context: context))
-                .font(.system(.title2, design: .rounded).weight(.bold))
-                .monospacedDigit()
+            .padding()
         }
-        .padding()
     }
 }
 
-private func activityTimeText(context: ActivityViewContext<ParkingReminderActivityAttributes>) -> String {
-    if context.state.status == .overdue {
-        return "Overdue by \(context.state.timeText)"
+@ViewBuilder
+private func liveIslandTimerView(context: ActivityViewContext<ParkingReminderActivityAttributes>) -> some View {
+    TimelineView(.periodic(from: .now, by: 15)) { timeline in
+        let status = liveStatus(context: context, now: timeline.date)
+        activityTimeView(context: context, status: status, includesOverduePrefix: false)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(statusColor(status))
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .frame(maxWidth: 40, alignment: .trailing)
     }
-    return context.state.timeText
+}
+
+@ViewBuilder
+private func activityTimeView(
+    context: ActivityViewContext<ParkingReminderActivityAttributes>,
+    status: ParkingReminderActivityStatus,
+    includesOverduePrefix: Bool
+) -> some View {
+    if status == .overdue {
+        HStack(spacing: 3) {
+            if includesOverduePrefix {
+                Text("Overdue by")
+            }
+            liveOverdueTimerText(from: context.attributes.expectedEndTime)
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+    } else {
+        liveCountdownTimerText(until: context.attributes.expectedEndTime)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+    }
+}
+
+private func liveCountdownTimerText(until endDate: Date) -> Text {
+    let now = Date.now
+    return Text(timerInterval: now...max(now, endDate), countsDown: true)
+}
+
+private func liveOverdueTimerText(from endDate: Date) -> Text {
+    let now = Date.now
+    return Text(timerInterval: min(now, endDate)...Date.distantFuture, countsDown: false)
+}
+
+private func liveStatus(
+    context: ActivityViewContext<ParkingReminderActivityAttributes>,
+    now: Date
+) -> ParkingReminderActivityStatus {
+    if context.state.status == .overdue {
+        return .overdue
+    }
+
+    let remaining = context.attributes.expectedEndTime.timeIntervalSince(now)
+    if remaining <= 0 {
+        return .overdue
+    }
+    if remaining <= 15 * 60 {
+        return .dueSoon
+    }
+    return .active
 }
 
 private func statusColor(_ status: ParkingReminderActivityStatus) -> Color {

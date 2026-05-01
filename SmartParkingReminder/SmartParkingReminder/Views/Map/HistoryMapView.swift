@@ -158,15 +158,19 @@ struct HistoryMapView: View {
             ScrollView {
                 ParkingSpotDetailSheetView(
                     group: selectedGroup,
+                    metadata: vm.metadata(for: selectedGroup),
                     now: now,
                     onBack: {
                         returnFromDetail()
                     },
+                    onMetadataChange: { metadata in
+                        vm.updateMetadata(metadata, for: selectedGroup)
+                    },
                     onOpenAppleMaps: {
-                        mapHandoff.openDirections(to: selectedGroup.coordinate, placeName: selectedGroup.name, preferred: .appleMaps)
+                        mapHandoff.openDirections(to: selectedGroup.coordinate, placeName: selectedGroup.displayName, preferred: .appleMaps)
                     },
                     onOpenGoogleMaps: {
-                        mapHandoff.openDirections(to: selectedGroup.coordinate, placeName: selectedGroup.name, preferred: .googleMaps)
+                        mapHandoff.openDirections(to: selectedGroup.coordinate, placeName: selectedGroup.displayName, preferred: .googleMaps)
                     }
                 )
                 .padding(.horizontal, -16)
@@ -192,6 +196,8 @@ struct HistoryMapView: View {
 
             radiusPicker
 
+            metadataFilterPicker
+
             personalHistoryHeader
 
             if vm.visibleGroups.isEmpty {
@@ -214,6 +220,8 @@ struct HistoryMapView: View {
                 statusTextView
 
                 radiusPicker
+
+                metadataFilterPicker
 
                 if !vm.searchResults.isEmpty {
                     searchResultsSection
@@ -278,6 +286,32 @@ struct HistoryMapView: View {
             }
             .accessibilityIdentifier(A11y.historySearchRadiusPicker)
         }
+    }
+
+    private var metadataFilterPicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(HistorySpotMetadataFilter.allCases) { filter in
+                    Button {
+                        vm.metadataFilter = filter
+                    } label: {
+                        Text(filter.label)
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .foregroundStyle(vm.metadataFilter == filter ? .white : .primary)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(vm.metadataFilter == filter ? Color.blue : Color(.secondarySystemFill))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("History filter \(filter.label)")
+                }
+            }
+        }
+        .accessibilityIdentifier(A11y.historyMetadataFilterPicker)
     }
 
     private var personalHistoryHeader: some View {
@@ -385,14 +419,26 @@ struct HistoryMapView: View {
                     .foregroundStyle(.blue)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(group.name)
+                    Text(group.displayName)
                         .font(.footnote)
                         .fontWeight(.semibold)
                         .lineLimit(1)
 
-                    Text("\(group.count) session\(group.count == 1 ? "" : "s")")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 4) {
+                        if group.metadata?.isFavorite == true {
+                            Image(systemName: "heart.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.red)
+                        }
+
+                        if let rating = group.metadata?.rating {
+                            Text("\(rating) star")
+                        }
+
+                        Text("\(group.count) session\(group.count == 1 ? "" : "s")")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
 
                 Spacer(minLength: 0)
@@ -537,7 +583,7 @@ struct HistoryMapView: View {
     }
 
     private func markerTitle(for group: ParkingSpotGroup) -> String {
-        group.count <= 1 ? group.name : "\(group.name) (\(group.count))"
+        group.count <= 1 ? group.displayName : "\(group.displayName) (\(group.count))"
     }
 }
 
