@@ -28,10 +28,16 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate, Lo
 
         if authorizationStatus == .notDetermined {
             requestWhenInUseAuthorization()
+            return
         }
 
-        manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
-        manager.requestLocation()
+        guard authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways else {
+            oneShotCompletion?(nil)
+            oneShotCompletion = nil
+            return
+        }
+
+        requestOneShotLocation()
     }
 
     /// Async wrapper for one-shot location capture.
@@ -53,6 +59,21 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate, Lo
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         authorizationStatus = manager.authorizationStatus
+
+        guard oneShotCompletion != nil else { return }
+
+        switch manager.authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            requestOneShotLocation()
+        case .denied, .restricted:
+            oneShotCompletion?(nil)
+            oneShotCompletion = nil
+        case .notDetermined:
+            break
+        @unknown default:
+            oneShotCompletion?(nil)
+            oneShotCompletion = nil
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -63,5 +84,10 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate, Lo
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         oneShotCompletion?(nil)
         oneShotCompletion = nil
+    }
+
+    private func requestOneShotLocation() {
+        manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        manager.requestLocation()
     }
 }

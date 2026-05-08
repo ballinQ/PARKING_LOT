@@ -1,6 +1,8 @@
 import Foundation
 
 struct ParkingSessionDraft {
+    static let quickStartLocationName = "Quick Start"
+
     enum Source: String {
         case fullForm
         case quickStart
@@ -13,13 +15,12 @@ struct ParkingSessionDraft {
     let source: Source
 
     static func quickStart(
-        locationName: String,
         durationMinutes: Int,
         coordinate: (lat: Double, lon: Double)?
     ) -> ParkingSessionDraft {
         ParkingSessionDraft(
-            locationName: locationName,
-            duration: TimeInterval(durationMinutes * 60),
+            locationName: quickStartLocationName,
+            duration: TimeInterval(max(durationMinutes, 1) * 60),
             note: "",
             coordinate: coordinate,
             source: .quickStart
@@ -34,7 +35,7 @@ struct ParkingSessionDraft {
     ) -> ParkingSessionDraft {
         ParkingSessionDraft(
             locationName: locationName,
-            duration: TimeInterval(durationMinutes * 60),
+            duration: TimeInterval(max(durationMinutes, 1) * 60),
             note: note,
             coordinate: coordinate,
             source: .fullForm

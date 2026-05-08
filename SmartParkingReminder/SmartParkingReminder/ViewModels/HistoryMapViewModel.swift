@@ -30,6 +30,12 @@ enum HistorySearchRadius: String, CaseIterable, Identifiable, Equatable {
             return 2_000
         }
     }
+
+    static func closest(to distance: CLLocationDistance) -> HistorySearchRadius {
+        allCases.min {
+            abs($0.distance - distance) < abs($1.distance - distance)
+        } ?? .oneKilometer
+    }
 }
 
 enum HistorySpotMetadataFilter: String, CaseIterable, Identifiable, Equatable {
@@ -90,13 +96,18 @@ enum HistorySpotMetadataFilter: String, CaseIterable, Identifiable, Equatable {
 
 @MainActor
 final class HistoryMapViewModel: ObservableObject {
+    static let torontoFallbackCoordinate = CLLocationCoordinate2D(latitude: 43.6532, longitude: -79.3832)
+    static let defaultMapSpan = MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
+    private static let specificResultCameraMeters: CLLocationDistance = 700
+    private static let markerCameraMeters: CLLocationDistance = 160
+
     @Published private(set) var groups: [ParkingSpotGroup] = []
     @Published private(set) var visibleGroups: [ParkingSpotGroup] = []
     @Published private(set) var searchResults: [HistoryMapSearchResult] = []
     @Published private(set) var searchCenter: CLLocationCoordinate2D? = nil
     @Published private(set) var statusText: String? = nil
     @Published var searchText: String = ""
-    @Published var searchRadius: HistorySearchRadius = .oneKilometer {
+    @Published var selectedRangeMeters: CLLocationDistance {
         didSet {
             guard searchCenter != nil else { return }
             applySearchFilter(searchName: selectedSearchName)
@@ -134,21 +145,33 @@ final class HistoryMapViewModel: ObservableObject {
     }
 
     private let groupingService: ParkingSpotGroupingService
+    private let filteringService: HistoryMapFilteringService
     private let searchProvider: MapSearchProviding
     private let metadataStorage: SavedParkingSpotMetadataStorageServiceProtocol
     private var metadataBySpotID: [String: SavedParkingSpotMetadata] = [:]
     private var selectedSearchName: String? = nil
 
+    var searchRadius: HistorySearchRadius {
+        get { HistorySearchRadius.closest(to: selectedRangeMeters) }
+        set { selectedRangeMeters = newValue.distance }
+    }
+
+    var selectedRangeLabel: String {
+        searchRadius.label
+    }
+
     init(
         groupingService: ParkingSpotGroupingService = ParkingSpotGroupingService(thresholdMeters: 30),
+        filteringService: HistoryMapFilteringService = HistoryMapFilteringService(),
         searchProvider: MapSearchProviding = MapKitSearchProvider(),
         metadataStorage: SavedParkingSpotMetadataStorageServiceProtocol = SavedParkingSpotMetadataStorageService(),
         initialSearchRadius: HistorySearchRadius = .oneKilometer
     ) {
         self.groupingService = groupingService
+        self.filteringService = filteringService
         self.searchProvider = searchProvider
         self.metadataStorage = metadataStorage
-        self.searchRadius = initialSearchRadius
+        self.selectedRangeMeters = initialSearchRadius.distance
         self.metadataBySpotID = (try? metadataStorage.load()) ?? [:]
     }
 
@@ -224,22 +247,102 @@ final class HistoryMapViewModel: ObservableObject {
         clearSelection()
     }
 
+    func relocateToCurrentLocation(_ coordinate: CLLocationCoordinate2D) {
+        searchText = ""
+        searchResults = []
+        searchCenter = coordinate
+        selectedSearchName = "current location"
+        applySearchFilter(searchName: "current location")
+        clearSelection()
+    }
+
+    func relocateToTorontoFallback() {
+        searchText = ""
+        searchResults = []
+        searchCenter = Self.torontoFallbackCoordinate
+        selectedSearchName = "Toronto fallback"
+        applySearchFilter(searchName: "Toronto fallback")
+        statusText = "Using Toronto fallback. Address search is still available."
+        clearSelection()
+    }
+
+    func searchThisMapArea(center: CLLocationCoordinate2D) {
+        searchText = ""
+        searchResults = []
+        searchCenter = center
+        selectedSearchName = "this map area"
+        applySearchFilter(searchName: "this map area")
+        clearSelection()
+    }
+
+    var personalHistoryMarkers: [HistoryMapMarkerItem] {
+        visibleGroups.map(HistoryMapMarkerItem.personalHistory)
+    }
+
+    var searchAreaMarker: HistoryMapMarkerItem? {
+        searchCenter.map(HistoryMapMarkerItem.searchArea)
+    }
+
     func defaultCameraPosition() -> MapCameraPosition {
         guard let first = visibleGroups.first else {
-            return .automatic
+            return Self.torontoFallbackCameraPosition()
         }
 
         return .region(MKCoordinateRegion(
             center: first.coordinate,
-            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+            span: Self.defaultMapSpan
         ))
     }
 
     func cameraPosition(centeredOn coordinate: CLLocationCoordinate2D) -> MapCameraPosition {
         .region(MKCoordinateRegion(
             center: coordinate,
-            span: MKCoordinateSpan(latitudeDelta: 0.025, longitudeDelta: 0.025)
+            span: Self.defaultMapSpan
         ))
+    }
+
+    func cameraPositionForSelectedRange(fallbackCenter: CLLocationCoordinate2D? = nil) -> MapCameraPosition {
+        .region(cameraRegionForSelectedRange(fallbackCenter: fallbackCenter))
+    }
+
+    func cameraRegionForSelectedRange(fallbackCenter: CLLocationCoordinate2D? = nil) -> MKCoordinateRegion {
+        let center = searchCenter ?? fallbackCenter ?? Self.torontoFallbackCoordinate
+        return MKCoordinateRegion(
+            center: center,
+            latitudinalMeters: selectedRangeMeters * 2.4,
+            longitudinalMeters: selectedRangeMeters * 2.4
+        )
+    }
+
+    func cameraPosition(for result: HistoryMapSearchResult) -> MapCameraPosition {
+        .rect(cameraMapRect(for: result))
+    }
+
+    func cameraMapRect(for result: HistoryMapSearchResult) -> MKMapRect {
+        let resultRect: MKMapRect
+        if let suggestedRegion = result.suggestedRegion {
+            resultRect = mapRect(for: suggestedRegion)
+                .union(mapRect(centeredOn: result.coordinate, meters: Self.specificResultCameraMeters))
+        } else {
+            resultRect = mapRect(centeredOn: result.coordinate, meters: Self.specificResultCameraMeters)
+        }
+
+        let combinedRect = visibleGroups.reduce(resultRect) { partial, group in
+            partial.union(mapRect(centeredOn: group.coordinate, meters: Self.markerCameraMeters))
+        }
+
+        return padded(combinedRect, factor: 1.25)
+    }
+
+    static func torontoFallbackCameraPosition() -> MapCameraPosition {
+        .region(MKCoordinateRegion(
+            center: torontoFallbackCoordinate,
+            span: defaultMapSpan
+        ))
+    }
+
+    static func userLocationCameraPosition() -> MapCameraPosition {
+        .userLocation(followsHeading: true, fallback: torontoFallbackCameraPosition())
     }
 
     @discardableResult
@@ -258,7 +361,7 @@ final class HistoryMapViewModel: ObservableObject {
             searchCenter = nil
             selectedSearchName = nil
             statusText = nil
-            visibleGroups = applyMetadataFilter(to: groups)
+            visibleGroups = filteringService.filterMetadata(groups: groups, metadataFilter: metadataFilter)
             return []
         }
 
@@ -281,6 +384,7 @@ final class HistoryMapViewModel: ObservableObject {
                 return []
             }
 
+            visibleGroups = filteringService.filterMetadata(groups: groups, metadataFilter: metadataFilter)
             statusText = "\(results.count) result\(results.count == 1 ? "" : "s") for \"\(query)\"."
             return results
         } catch {
@@ -289,7 +393,7 @@ final class HistoryMapViewModel: ObservableObject {
             selectedSearchName = nil
             applyLocalHistoryFilter(query: query)
             if visibleGroups.isEmpty {
-                visibleGroups = applyMetadataFilter(to: groups)
+                visibleGroups = filteringService.filterMetadata(groups: groups, metadataFilter: metadataFilter)
                 statusText = "Could not search that address. Check the spelling or try a nearby landmark."
             } else {
                 statusText = "Could not search that address. Showing saved history matches."
@@ -304,7 +408,7 @@ final class HistoryMapViewModel: ObservableObject {
         searchCenter = nil
         selectedSearchName = nil
         statusText = nil
-        visibleGroups = applyMetadataFilter(to: groups)
+        visibleGroups = filteringService.filterMetadata(groups: groups, metadataFilter: metadataFilter)
         clearSelection()
     }
 
@@ -327,7 +431,7 @@ final class HistoryMapViewModel: ObservableObject {
     private func applyLocalHistoryFilter(query: String) {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedQuery.isEmpty else {
-            visibleGroups = applyMetadataFilter(to: groups)
+            visibleGroups = filteringService.filterMetadata(groups: groups, metadataFilter: metadataFilter)
             if searchCenter == nil {
                 statusText = metadataFilter == .all
                     ? nil
@@ -336,10 +440,11 @@ final class HistoryMapViewModel: ObservableObject {
             return
         }
 
-        let matchingGroups = groups.filter { group in
-            group.matchesLocalHistorySearch(trimmedQuery)
-        }
-        visibleGroups = applyMetadataFilter(to: matchingGroups)
+        visibleGroups = filteringService.filterLocalHistory(
+            groups: groups,
+            query: trimmedQuery,
+            metadataFilter: metadataFilter
+        )
 
         if visibleGroups.isEmpty {
             statusText = "No saved parking history matching \"\(trimmedQuery)\". Search an address to check nearby saved spots."
@@ -350,27 +455,23 @@ final class HistoryMapViewModel: ObservableObject {
 
     private func applySearchFilter(searchName: String? = nil) {
         guard let searchCenter else {
-            visibleGroups = applyMetadataFilter(to: groups)
+            visibleGroups = filteringService.filterMetadata(groups: groups, metadataFilter: metadataFilter)
             return
         }
 
-        let centerLocation = CLLocation(latitude: searchCenter.latitude, longitude: searchCenter.longitude)
-        let nearbyGroups = groups.filter { group in
-            let groupLocation = CLLocation(latitude: group.coordinate.latitude, longitude: group.coordinate.longitude)
-            return centerLocation.distance(from: groupLocation) <= searchRadius.distance
-        }
-        visibleGroups = applyMetadataFilter(to: nearbyGroups)
+        visibleGroups = filteringService.filterNearby(
+            groups: groups,
+            center: searchCenter,
+            radiusMeters: selectedRangeMeters,
+            metadataFilter: metadataFilter
+        )
 
         let place = searchName ?? "this address"
         if visibleGroups.isEmpty {
-            statusText = "No saved parking history\(metadataFilterSuffix) within \(searchRadius.label) of \(place)."
+            statusText = "No saved parking history\(metadataFilterSuffix) within \(selectedRangeLabel) of \(place)."
         } else {
-            statusText = "\(visibleGroups.count) saved parking spot\(visibleGroups.count == 1 ? "" : "s")\(metadataFilterSuffix) within \(searchRadius.label) of \(place)."
+            statusText = "\(visibleGroups.count) saved parking spot\(visibleGroups.count == 1 ? "" : "s")\(metadataFilterSuffix) within \(selectedRangeLabel) of \(place)."
         }
-    }
-
-    private func applyMetadataFilter(to groups: [ParkingSpotGroup]) -> [ParkingSpotGroup] {
-        groups.filter { metadataFilter.matches($0) }
     }
 
     private var metadataFilterSuffix: String {
@@ -384,21 +485,43 @@ final class HistoryMapViewModel: ObservableObject {
         }
         return "\(count) saved parking spot\(count == 1 ? "" : "s") matching \(metadataFilter.label)."
     }
-}
 
-private extension ParkingSpotGroup {
-    func matchesLocalHistorySearch(_ query: String) -> Bool {
-        if displayName.localizedCaseInsensitiveContains(query) || name.localizedCaseInsensitiveContains(query) {
-            return true
-        }
+    private func mapRect(centeredOn coordinate: CLLocationCoordinate2D, meters: CLLocationDistance) -> MKMapRect {
+        let center = MKMapPoint(coordinate)
+        let metersPerMapPoint = max(MKMetersPerMapPointAtLatitude(coordinate.latitude), 0.000_001)
+        let side = max(meters / metersPerMapPoint, 1)
+        return MKMapRect(
+            x: center.x - side / 2,
+            y: center.y - side / 2,
+            width: side,
+            height: side
+        )
+    }
 
-        if metadata?.matchesSearch(query) == true {
-            return true
-        }
+    private func mapRect(for region: MKCoordinateRegion) -> MKMapRect {
+        let halfLatitudeDelta = max(region.span.latitudeDelta, 0.000_5) / 2
+        let halfLongitudeDelta = max(region.span.longitudeDelta, 0.000_5) / 2
+        let northWest = CLLocationCoordinate2D(
+            latitude: region.center.latitude + halfLatitudeDelta,
+            longitude: region.center.longitude - halfLongitudeDelta
+        )
+        let southEast = CLLocationCoordinate2D(
+            latitude: region.center.latitude - halfLatitudeDelta,
+            longitude: region.center.longitude + halfLongitudeDelta
+        )
+        let a = MKMapPoint(northWest)
+        let b = MKMapPoint(southEast)
+        return MKMapRect(
+            x: min(a.x, b.x),
+            y: min(a.y, b.y),
+            width: max(abs(a.x - b.x), 1),
+            height: max(abs(a.y - b.y), 1)
+        )
+    }
 
-        return sessions.contains { session in
-            session.locationName.localizedCaseInsensitiveContains(query)
-            || session.note.localizedCaseInsensitiveContains(query)
-        }
+    private func padded(_ rect: MKMapRect, factor: Double) -> MKMapRect {
+        let xPadding = rect.width * max(factor - 1, 0) / 2
+        let yPadding = rect.height * max(factor - 1, 0) / 2
+        return rect.insetBy(dx: -xPadding, dy: -yPadding)
     }
 }

@@ -223,13 +223,12 @@ final class Phase1StorageAndStoreTests: XCTestCase {
         let store = ParkingSessionStore(storage: storage, notifications: notifications, nowProvider: { fixedNow })
 
         await store.startNewSession(from: .quickStart(
-            locationName: store.suggestedQuickStartLocationName,
             durationMinutes: 30,
             coordinate: (lat: 43.6532, lon: -79.3832)
         ))
 
         let active = try XCTUnwrap(store.activeSession)
-        XCTAssertEqual(active.locationName, "Current Location")
+        XCTAssertEqual(active.locationName, "Quick Start")
         XCTAssertEqual(active.expectedEndTime, fixedNow.addingTimeInterval(30 * 60))
         XCTAssertEqual(active.note, "")
         XCTAssertEqual(active.latitude, 43.6532)
@@ -238,7 +237,7 @@ final class Phase1StorageAndStoreTests: XCTestCase {
         XCTAssertEqual(notifications.scheduledSessionIDs, [active.id])
     }
 
-    func test_Phase2QuickStartSuggestion_UsesMostRecentSessionLocation() async throws {
+    func test_Phase1QuickStartName_DoesNotReuseMostRecentSessionLocation() async throws {
         let storage = InMemoryStorage()
         let notifications = RecordingNotificationService()
         var fixedNow = ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!
@@ -248,17 +247,92 @@ final class Phase1StorageAndStoreTests: XCTestCase {
         fixedNow = fixedNow.addingTimeInterval(10)
         await store.endActiveSession()
 
-        XCTAssertEqual(store.suggestedQuickStartLocationName, "Office Garage")
+        XCTAssertEqual(store.quickStartLocationName, "Quick Start")
 
         fixedNow = fixedNow.addingTimeInterval(10)
         await store.startNewSession(from: .quickStart(
-            locationName: store.suggestedQuickStartLocationName,
             durationMinutes: 60,
             coordinate: nil
         ))
 
-        XCTAssertEqual(store.activeSession?.locationName, "Office Garage")
+        XCTAssertEqual(store.activeSession?.locationName, "Quick Start")
         XCTAssertEqual(store.activeSession?.expectedEndTime, fixedNow.addingTimeInterval(60 * 60))
+    }
+
+    func test_Phase2QuickStartDurationOptions_IncludeRecentNonDefaultDuration() async throws {
+        let storage = InMemoryStorage()
+        let notifications = RecordingNotificationService()
+        var fixedNow = ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!
+        let store = ParkingSessionStore(storage: storage, notifications: notifications, nowProvider: { fixedNow })
+
+        XCTAssertEqual(store.quickStartDurationOptions, [30, 60, 120])
+
+        await store.startNewSession(locationName: "Evening Class", duration: 45 * 60, note: "", coordinate: nil)
+        fixedNow = fixedNow.addingTimeInterval(30 * 60)
+        await store.endActiveSession()
+
+        XCTAssertEqual(store.quickStartDurationOptions, [30, 60, 120, 45])
+
+        fixedNow = fixedNow.addingTimeInterval(60)
+        await store.startNewSession(from: .quickStart(
+            durationMinutes: 45,
+            coordinate: nil
+        ))
+
+        XCTAssertEqual(store.activeSession?.locationName, "Quick Start")
+        XCTAssertEqual(store.activeSession?.expectedEndTime, fixedNow.addingTimeInterval(45 * 60))
+    }
+
+    func test_Phase1ManualStartCustomDuration_UsesSelectedDurationForScheduleAndActivity() async throws {
+        let storage = InMemoryStorage()
+        let notifications = RecordingNotificationService()
+        let activityLifecycle = RecordingActivityLifecycleManager()
+        let fixedNow = ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!
+        let store = ParkingSessionStore(
+            storage: storage,
+            notifications: notifications,
+            activityLifecycle: activityLifecycle,
+            nowProvider: { fixedNow }
+        )
+
+        await store.startNewSession(from: .fullForm(
+            locationName: "Custom Duration Lot",
+            durationMinutes: 85,
+            note: "",
+            coordinate: nil
+        ))
+
+        let active = try XCTUnwrap(store.activeSession)
+        let snapshot = try XCTUnwrap(activityLifecycle.startedSnapshots.first)
+
+        XCTAssertEqual(active.expectedEndTime, fixedNow.addingTimeInterval(85 * 60))
+        XCTAssertEqual(snapshot.scheduledEndDate, active.expectedEndTime)
+        XCTAssertEqual(notifications.scheduledSessionIDs, [active.id])
+    }
+
+    func test_Phase1ManualStartInvalidZeroDuration_DoesNotCreateSession() async throws {
+        let storage = InMemoryStorage()
+        let notifications = RecordingNotificationService()
+        let activityLifecycle = RecordingActivityLifecycleManager()
+        let fixedNow = ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!
+        let store = ParkingSessionStore(
+            storage: storage,
+            notifications: notifications,
+            activityLifecycle: activityLifecycle,
+            nowProvider: { fixedNow }
+        )
+
+        await store.startNewSession(from: ParkingSessionDraft(
+            locationName: "Invalid Lot",
+            duration: 0,
+            note: "",
+            coordinate: nil,
+            source: .fullForm
+        ))
+
+        XCTAssertNil(store.activeSession)
+        XCTAssertTrue(notifications.scheduledSessionIDs.isEmpty)
+        XCTAssertTrue(activityLifecycle.startedSnapshots.isEmpty)
     }
 
     func test_Phase2ActivityLifecycle_StartSessionPublishesPrivacySafeSnapshot() async throws {
@@ -286,11 +360,9 @@ final class Phase1StorageAndStoreTests: XCTestCase {
 
         XCTAssertEqual(snapshot.sessionID, active.id)
         XCTAssertEqual(snapshot.locationName, "Activity Lot")
-        XCTAssertEqual(snapshot.expectedEndTime, fixedNow.addingTimeInterval(1800))
-        XCTAssertEqual(snapshot.status, .active)
-        XCTAssertEqual(snapshot.displayTime, 1800)
-        XCTAssertEqual(snapshot.timeText, "30m 0s")
-        XCTAssertEqual(snapshot.updatedAt, fixedNow)
+        XCTAssertEqual(snapshot.startDate, fixedNow)
+        XCTAssertEqual(snapshot.scheduledEndDate, fixedNow.addingTimeInterval(1800))
+        XCTAssertEqual(snapshot.lastUpdatedDate, fixedNow)
     }
 
     func test_Phase2ActivityLifecycle_EndSessionEndsActivity() async throws {
@@ -341,9 +413,58 @@ final class Phase1StorageAndStoreTests: XCTestCase {
         let snapshot = try XCTUnwrap(activityLifecycle.restoredSnapshots.first)
         XCTAssertEqual(snapshot.sessionID, overdueSession.id)
         XCTAssertEqual(snapshot.locationName, "Restored Activity Lot")
-        XCTAssertEqual(snapshot.status, .overdue)
-        XCTAssertEqual(snapshot.displayTime, 30)
-        XCTAssertEqual(snapshot.timeText, "0m 30s")
+        XCTAssertEqual(snapshot.startDate, start)
+        XCTAssertEqual(snapshot.scheduledEndDate, start.addingTimeInterval(60))
+        XCTAssertEqual(snapshot.lastUpdatedDate, start.addingTimeInterval(90))
+    }
+
+    func test_Phase2ActivityLifecycle_RestoreWithoutActiveSessionEndsOrphanedActivities() throws {
+        let storage = InMemoryStorage()
+        let notifications = RecordingNotificationService()
+        let activityLifecycle = RecordingActivityLifecycleManager()
+
+        let store = ParkingSessionStore(
+            storage: storage,
+            notifications: notifications,
+            activityLifecycle: activityLifecycle
+        )
+
+        store.start()
+
+        XCTAssertEqual(activityLifecycle.noActiveSessionRestoreCount, 1)
+        XCTAssertTrue(activityLifecycle.restoredSnapshots.isEmpty)
+    }
+
+    func test_Phase2ActivityLifecycle_AddTimePublishesDateDrivenUpdateAndReschedulesNotifications() async throws {
+        let storage = InMemoryStorage()
+        let notifications = RecordingNotificationService()
+        let activityLifecycle = RecordingActivityLifecycleManager()
+
+        var fixedNow = ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!
+        let store = ParkingSessionStore(
+            storage: storage,
+            notifications: notifications,
+            activityLifecycle: activityLifecycle,
+            nowProvider: { fixedNow }
+        )
+
+        await store.startNewSession(locationName: "Activity Lot", duration: 120, note: "", coordinate: nil)
+        let active = try XCTUnwrap(store.activeSession)
+
+        fixedNow = fixedNow.addingTimeInterval(30)
+        await store.addTimeToActiveSession(minutes: 15)
+
+        let updated = try XCTUnwrap(store.activeSession)
+        let updateSnapshot = try XCTUnwrap(activityLifecycle.updatedSnapshots.last)
+
+        XCTAssertEqual(updated.id, active.id)
+        XCTAssertEqual(updated.expectedEndTime, active.expectedEndTime.addingTimeInterval(15 * 60))
+        XCTAssertEqual(updateSnapshot.sessionID, active.id)
+        XCTAssertEqual(updateSnapshot.startDate, active.startTime)
+        XCTAssertEqual(updateSnapshot.scheduledEndDate, updated.expectedEndTime)
+        XCTAssertEqual(updateSnapshot.lastUpdatedDate, fixedNow)
+        XCTAssertEqual(notifications.canceledSessionIDs, [active.id])
+        XCTAssertEqual(notifications.scheduledSessionIDs, [active.id, active.id])
     }
 
     func test_Phase2ActivityKitPayload_MapsPrivacySafeSnapshot() throws {
@@ -357,11 +478,9 @@ final class Phase1StorageAndStoreTests: XCTestCase {
         let snapshot = ParkingActivitySnapshot(
             sessionID: sessionID,
             locationName: "Activity Lot",
-            expectedEndTime: expectedEnd,
-            status: .dueSoon,
-            displayTime: 900,
-            timeText: "15m 0s",
-            updatedAt: updatedAt
+            startDate: ISO8601DateFormatter().date(from: "2026-04-22T15:00:00Z")!,
+            scheduledEndDate: expectedEnd,
+            lastUpdatedDate: updatedAt
         )
 
         let attributes = ParkingReminderActivityAttributes(snapshot: snapshot)
@@ -369,11 +488,12 @@ final class Phase1StorageAndStoreTests: XCTestCase {
 
         XCTAssertEqual(attributes.sessionID, sessionID.uuidString)
         XCTAssertEqual(attributes.locationName, "Activity Lot")
-        XCTAssertEqual(attributes.expectedEndTime, expectedEnd)
-        XCTAssertEqual(state.status, .dueSoon)
-        XCTAssertEqual(state.displayTime, 900)
-        XCTAssertEqual(state.timeText, "15m 0s")
-        XCTAssertEqual(state.updatedAt, updatedAt)
+        XCTAssertEqual(attributes.startDate, snapshot.startDate)
+        XCTAssertEqual(state.sessionID, sessionID.uuidString)
+        XCTAssertEqual(state.locationName, "Activity Lot")
+        XCTAssertEqual(state.startDate, snapshot.startDate)
+        XCTAssertEqual(state.scheduledEndDate, expectedEnd)
+        XCTAssertEqual(state.lastUpdatedDate, updatedAt)
     }
 
     // TC-08 (P0) History map detail integrity (persistence fields)
@@ -554,6 +674,7 @@ private final class RecordingActivityLifecycleManager: ParkingActivityLifecycleM
     private(set) var restoredSnapshots: [ParkingActivitySnapshot] = []
     private(set) var updatedSnapshots: [ParkingActivitySnapshot] = []
     private(set) var endedSessionIDs: [UUID] = []
+    private(set) var noActiveSessionRestoreCount = 0
 
     func sessionStarted(_ snapshot: ParkingActivitySnapshot) {
         startedSnapshots.append(snapshot)
@@ -569,5 +690,9 @@ private final class RecordingActivityLifecycleManager: ParkingActivityLifecycleM
 
     func sessionEnded(sessionID: UUID) {
         endedSessionIDs.append(sessionID)
+    }
+
+    func noActiveSessionRestored() {
+        noActiveSessionRestoreCount += 1
     }
 }

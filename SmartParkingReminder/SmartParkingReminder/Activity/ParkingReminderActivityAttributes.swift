@@ -20,13 +20,14 @@ enum ParkingReminderActivityStatus: String, Codable, Hashable {
 
 struct ParkingReminderActivityAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
-        let status: ParkingReminderActivityStatus
-        let displayTime: TimeInterval
-        let timeText: String
-        let updatedAt: Date
+        let sessionID: String
+        let locationName: String
+        let startDate: Date
+        let scheduledEndDate: Date
+        let lastUpdatedDate: Date
     }
 
     let sessionID: String
     let locationName: String
-    let expectedEndTime: Date
+    let startDate: Date
 }

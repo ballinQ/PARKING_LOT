@@ -95,14 +95,18 @@ struct ParkingSpotDetailSheetView: View {
             }
 
             HStack {
-                Button("Open in Apple Maps") {
+                Button {
                     onOpenAppleMaps()
+                } label: {
+                    Label("Apple Maps", systemImage: "map")
                 }
                 .accessibilityIdentifier(A11y.detailOpenAppleMaps)
                 .buttonStyle(.borderedProminent)
 
-                Button("Open in Google Maps") {
+                Button {
                     onOpenGoogleMaps()
+                } label: {
+                    Label("Google Maps", systemImage: "arrow.triangle.turn.up.right.diamond")
                 }
                 .accessibilityIdentifier(A11y.detailOpenGoogleMaps)
                 .buttonStyle(.bordered)
@@ -124,7 +128,7 @@ private struct PersonalSpotMetadataView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Personal details")
+                Text("Saved spot")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
 
@@ -142,6 +146,10 @@ private struct PersonalSpotMetadataView: View {
             }
 
             HStack(spacing: 4) {
+                Text("Rating")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 ForEach(1...5, id: \.self) { value in
                     Button {
                         update {
@@ -163,6 +171,30 @@ private struct PersonalSpotMetadataView: View {
             tagChips
 
             TextField(
+                "Spot name",
+                text: Binding(
+                    get: { metadata.displayName ?? "" },
+                    set: { displayName in
+                        update {
+                            let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+                            $0.displayName = trimmed.isEmpty ? nil : displayName
+                        }
+                    }
+                )
+            )
+            .font(.footnote)
+            .textInputAutocapitalization(.words)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color(.separator).opacity(0.45), lineWidth: 0.5)
+            )
+            .accessibilityIdentifier(A11y.detailSpotDisplayNameField)
+
+            TextField(
                 "Spot note",
                 text: Binding(
                     get: { metadata.note },
@@ -176,14 +208,18 @@ private struct PersonalSpotMetadataView: View {
             .lineLimit(2...4)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(Color(.secondarySystemFill))
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color(.separator).opacity(0.45), lineWidth: 0.5)
+            )
             .accessibilityIdentifier(A11y.detailSpotNoteField)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 10)
-        .background(Color(.tertiarySystemFill))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .accessibilityIdentifier(A11y.detailPersonalMetadata)
     }
 

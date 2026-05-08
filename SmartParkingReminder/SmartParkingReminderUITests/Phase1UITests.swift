@@ -161,7 +161,7 @@ final class Phase1UITests: XCTestCase {
 
         let activeCard = app.otherElements.matching(identifier: "home.activeSessionCard").firstMatch
         XCTAssertTrue(activeCard.waitForExistence(timeout: 5))
-        XCTAssertTrue(activeCard.staticTexts["Current Location"].exists)
+        XCTAssertTrue(activeCard.staticTexts["Quick Start"].exists)
 
         let remaining = app.staticTexts.matching(identifier: "home.remainingTime").firstMatch
         XCTAssertTrue(remaining.exists)

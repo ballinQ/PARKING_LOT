@@ -5,13 +5,7 @@ import ActivityKit
 
 @available(iOS 16.2, *)
 final class ActivityKitParkingActivityLifecycleManager: ParkingActivityLifecycleManaging {
-    private var lastUpdateBySessionID: [String: Date] = [:]
-    private var lastStatusBySessionID: [String: ParkingSessionStatus] = [:]
-    private let minimumUpdateInterval: TimeInterval
-
-    init(minimumUpdateInterval: TimeInterval = 60) {
-        self.minimumUpdateInterval = minimumUpdateInterval
-    }
+    init(minimumUpdateInterval: TimeInterval = 60) {}
 
     func sessionStarted(_ snapshot: ParkingActivitySnapshot) {
         Task {
@@ -26,9 +20,8 @@ final class ActivityKitParkingActivityLifecycleManager: ParkingActivityLifecycle
     }
 
     func activeSessionUpdated(_ snapshot: ParkingActivitySnapshot) {
-        guard shouldPublishUpdate(for: snapshot) else { return }
         Task {
-            await startOrUpdateActivity(for: snapshot, forceUpdate: false)
+            await startOrUpdateActivity(for: snapshot, forceUpdate: true)
         }
     }
 
@@ -38,12 +31,17 @@ final class ActivityKitParkingActivityLifecycleManager: ParkingActivityLifecycle
         }
     }
 
+    func noActiveSessionRestored() {
+        Task {
+            await endOrphanedActivities(activeSessionID: nil)
+        }
+    }
+
     private func startOrUpdateActivity(for snapshot: ParkingActivitySnapshot, forceUpdate: Bool) async {
         let sessionID = snapshot.sessionID.uuidString
 
         if let existing = activity(for: sessionID) {
             await update(existing, with: snapshot)
-            recordPublished(snapshot)
             return
         }
 
@@ -61,9 +59,9 @@ final class ActivityKitParkingActivityLifecycleManager: ParkingActivityLifecycle
                 content: content,
                 pushType: nil
             )
-            recordPublished(snapshot)
+            await endOrphanedActivities(activeSessionID: sessionID)
             #if DEBUG
-            print("Live Activity requested for session \(sessionID) with status \(snapshot.status.label)")
+            print("Live Activity requested for session \(sessionID)")
             #endif
         } catch {
             // ActivityKit can be unavailable or disabled. Local notifications remain the fallback.
@@ -79,19 +77,18 @@ final class ActivityKitParkingActivityLifecycleManager: ParkingActivityLifecycle
     ) async {
         let content = ActivityContent(
             state: ParkingReminderActivityAttributes.ContentState(snapshot: snapshot),
-            staleDate: snapshot.expectedEndTime.addingTimeInterval(60 * 60)
+            staleDate: snapshot.scheduledEndDate.addingTimeInterval(60 * 60)
         )
         await activity.update(content)
+        await endOrphanedActivities(activeSessionID: activity.attributes.sessionID)
         #if DEBUG
-        print("Live Activity updated for session \(activity.attributes.sessionID) with status \(snapshot.status.label)")
+        print("Live Activity updated for session \(activity.attributes.sessionID)")
         #endif
     }
 
     private func endActivity(sessionID: String) async {
         guard let existing = activity(for: sessionID) else { return }
         await existing.end(nil, dismissalPolicy: .immediate)
-        lastUpdateBySessionID[sessionID] = nil
-        lastStatusBySessionID[sessionID] = nil
         #if DEBUG
         print("Live Activity ended for session \(sessionID)")
         #endif
@@ -103,21 +100,14 @@ final class ActivityKitParkingActivityLifecycleManager: ParkingActivityLifecycle
         }
     }
 
-    private func shouldPublishUpdate(for snapshot: ParkingActivitySnapshot) -> Bool {
-        let sessionID = snapshot.sessionID.uuidString
-        if lastStatusBySessionID[sessionID] != snapshot.status {
-            return true
+    private func endOrphanedActivities(activeSessionID: String?) async {
+        for activity in Activity<ParkingReminderActivityAttributes>.activities
+        where activity.attributes.sessionID != activeSessionID {
+            await activity.end(nil, dismissalPolicy: .immediate)
+            #if DEBUG
+            print("Live Activity orphan ended for session \(activity.attributes.sessionID)")
+            #endif
         }
-        guard let lastUpdate = lastUpdateBySessionID[sessionID] else {
-            return true
-        }
-        return snapshot.updatedAt.timeIntervalSince(lastUpdate) >= minimumUpdateInterval
-    }
-
-    private func recordPublished(_ snapshot: ParkingActivitySnapshot) {
-        let sessionID = snapshot.sessionID.uuidString
-        lastUpdateBySessionID[sessionID] = snapshot.updatedAt
-        lastStatusBySessionID[sessionID] = snapshot.status
     }
 }
 
@@ -127,7 +117,7 @@ extension ParkingReminderActivityAttributes {
         self.init(
             sessionID: snapshot.sessionID.uuidString,
             locationName: snapshot.locationName,
-            expectedEndTime: snapshot.expectedEndTime
+            startDate: snapshot.startDate
         )
     }
 }
@@ -136,10 +126,11 @@ extension ParkingReminderActivityAttributes {
 extension ParkingReminderActivityAttributes.ContentState {
     init(snapshot: ParkingActivitySnapshot) {
         self.init(
-            status: ParkingReminderActivityStatus(snapshot.status),
-            displayTime: snapshot.displayTime,
-            timeText: snapshot.timeText,
-            updatedAt: snapshot.updatedAt
+            sessionID: snapshot.sessionID.uuidString,
+            locationName: snapshot.locationName,
+            startDate: snapshot.startDate,
+            scheduledEndDate: snapshot.scheduledEndDate,
+            lastUpdatedDate: snapshot.lastUpdatedDate
         )
     }
 }

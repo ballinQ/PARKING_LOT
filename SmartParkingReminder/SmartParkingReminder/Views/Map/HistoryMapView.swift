@@ -1,9 +1,11 @@
 import MapKit
 import SwiftUI
+import UIKit
 
 struct HistoryMapView: View {
     let sessions: [ParkingSession]
     let now: Date
+    let locationService: LocationServiceProtocol
 
     @StateObject private var vm = HistoryMapViewModel()
     private let mapHandoff = MapHandoffService()
@@ -11,30 +13,51 @@ struct HistoryMapView: View {
     @State private var camera: MapCameraPosition = .automatic
     @State private var sheetState: MapSheetState = .collapsed
     @State private var detailReturnState: MapSheetState?
+    @State private var isRelocating = false
+    @State private var hasRequestedInitialLocationFocus = false
+    @State private var lastKnownUserCoordinate: CLLocationCoordinate2D?
+    @State private var keyboardHeight: CGFloat = 0
+    @State private var visibleMapCenter: CLLocationCoordinate2D?
+    @State private var shouldShowSearchThisArea = false
+    @State private var ignoreCameraChangesUntil = Date.distantPast
     @GestureState private var sheetDragOffset: CGFloat = 0
     @FocusState private var isSearchFocused: Bool
+
+    private let sheetBottomReservedSpace: CGFloat = 116
+    private let sheetCompactBottomPadding: CGFloat = 16
 
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .bottom) {
                 mapContent
                     .ignoresSafeArea(edges: .bottom)
+                    .simultaneousGesture(
+                        TapGesture().onEnded {
+                            dismissKeyboard()
+                        }
+                    )
 
                 uiTestDetailHook
+
+                searchThisAreaButton(in: proxy)
+
+                if shouldDisplayRelocateButton {
+                    relocateButton(in: proxy)
+                }
 
                 bottomSheet(in: proxy)
             }
         }
         .onAppear {
             vm.updateSessions(sessions)
-            camera = vm.defaultCameraPosition()
+            requestInitialLocationFocusIfNeeded()
         }
         .onChange(of: sessions.count) { _, _ in
             vm.updateSessions(sessions)
         }
         .onChange(of: vm.visibleGroups.map(\.id)) { _, _ in
-            if vm.searchCenter == nil {
-                camera = vm.defaultCameraPosition()
+            if vm.searchCenter == nil && !hasRequestedInitialLocationFocus {
+                setMapCamera(vm.defaultCameraPosition())
             }
         }
         .onChange(of: vm.selectedGroup?.id) { _, newValue in
@@ -42,7 +65,7 @@ struct HistoryMapView: View {
             if detailReturnState == nil {
                 detailReturnState = vm.searchCenter == nil && vm.searchResults.isEmpty ? .collapsed : .expanded
             }
-            camera = vm.cameraPosition(centeredOn: group.coordinate)
+            setMapCamera(vm.cameraPosition(centeredOn: group.coordinate))
             withAnimation(.snappy) {
                 sheetState = .expanded
             }
@@ -53,30 +76,35 @@ struct HistoryMapView: View {
                 sheetState = .expanded
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
+            updateKeyboardHeight(from: notification)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.snappy) {
+                keyboardHeight = 0
+            }
+        }
     }
 
     @ViewBuilder
     private var mapContent: some View {
-        if vm.groups.isEmpty && vm.searchCenter == nil {
-            ContentUnavailableView(
-                "No Locations Yet",
-                systemImage: "map",
-                description: Text("Start sessions with location permission enabled, or search an address to check nearby history.")
-            )
-        } else {
-            Map(position: $camera, selection: $vm.selectedGroupID) {
-                ForEach(vm.visibleGroups) { group in
-                    Marker(markerTitle(for: group), coordinate: group.coordinate)
-                        .tag(group.id)
-                }
+        Map(position: $camera, selection: $vm.selectedGroupID) {
+            UserAnnotation()
 
-                if let searchCenter = vm.searchCenter {
-                    Marker("Search Area", systemImage: "scope", coordinate: searchCenter)
-                        .tint(.blue)
-                }
+            ForEach(vm.personalHistoryMarkers) { marker in
+                Marker(marker.title, coordinate: marker.coordinate)
+                    .tag(marker.sourceID)
             }
-            .accessibilityIdentifier(A11y.historyMap)
-            .mapStyle(.standard)
+
+            if let marker = vm.searchAreaMarker {
+                Marker(marker.title, systemImage: "scope", coordinate: marker.coordinate)
+                    .tint(.blue)
+            }
+        }
+        .accessibilityIdentifier(A11y.historyMap)
+        .mapStyle(.standard)
+        .onMapCameraChange(frequency: .onEnd) { context in
+            handleMapCameraChange(context)
         }
     }
 
@@ -107,8 +135,10 @@ struct HistoryMapView: View {
     }
 
     private func bottomSheet(in proxy: GeometryProxy) -> some View {
+        let keyboardLift = max(0, keyboardHeight - proxy.safeAreaInsets.bottom)
         let baseHeight = sheetHeight(for: sheetState, in: proxy)
         let height = min(
+            max(sheetHeight(for: .collapsed, in: proxy), proxy.size.height - keyboardLift - 20),
             sheetHeight(for: .expanded, in: proxy),
             max(sheetHeight(for: .collapsed, in: proxy), baseHeight - sheetDragOffset)
         )
@@ -127,7 +157,7 @@ struct HistoryMapView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, max(proxy.safeAreaInsets.bottom, 12))
+            .padding(.bottom, max(proxy.safeAreaInsets.bottom, sheetCompactBottomPadding))
         }
         .frame(maxWidth: .infinity)
         .frame(height: height, alignment: .top)
@@ -135,9 +165,18 @@ struct HistoryMapView: View {
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .shadow(color: .black.opacity(0.22), radius: 18, y: -4)
         .padding(.horizontal, 8)
-        .padding(.bottom, 6)
+        .padding(.bottom, keyboardLift + 6)
         .gesture(sheetDragGesture)
         .animation(.snappy, value: sheetState)
+        .animation(.snappy, value: keyboardHeight)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    dismissKeyboard()
+                }
+            }
+        }
     }
 
     private var dragHandle: some View {
@@ -175,7 +214,9 @@ struct HistoryMapView: View {
                 )
                 .padding(.horizontal, -16)
                 .padding(.top, 2)
+                .padding(.bottom, sheetBottomReservedSpace)
             }
+            .scrollDismissesKeyboard(.interactively)
         } else {
             switch sheetState {
             case .collapsed:
@@ -194,9 +235,7 @@ struct HistoryMapView: View {
 
             statusTextView
 
-            radiusPicker
-
-            metadataFilterPicker
+            mediumFilterControls
 
             personalHistoryHeader
 
@@ -204,11 +243,28 @@ struct HistoryMapView: View {
                 emptyHistoryText
             } else {
                 VStack(spacing: 8) {
-                    ForEach(vm.visibleGroups.prefix(3)) { group in
+                    ForEach(vm.visibleGroups.prefix(2)) { group in
                         personalHistorySpotButton(for: group)
                     }
                 }
             }
+        }
+        .contentShape(Rectangle())
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                dismissKeyboard()
+            }
+        )
+    }
+
+    @ViewBuilder
+    private var mediumFilterControls: some View {
+        if vm.searchCenter != nil {
+            radiusPicker
+        }
+
+        if vm.metadataFilter != .all || !vm.visibleGroups.isEmpty {
+            metadataFilterPicker
         }
     }
 
@@ -240,6 +296,13 @@ struct HistoryMapView: View {
                 }
             }
             .padding(.bottom, 18)
+            .padding(.bottom, sheetBottomReservedSpace)
+            .contentShape(Rectangle())
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    dismissKeyboard()
+                }
+            )
         }
     }
 
@@ -268,7 +331,7 @@ struct HistoryMapView: View {
             HStack(spacing: 6) {
                 ForEach(HistorySearchRadius.allCases) { radius in
                     Button {
-                        vm.searchRadius = radius
+                        selectSearchRadius(radius)
                     } label: {
                         Text(radius.label)
                             .font(.caption.weight(.semibold))
@@ -366,12 +429,7 @@ struct HistoryMapView: View {
 
             ForEach(vm.searchResults.prefix(8)) { result in
                 Button {
-                    vm.selectSearchResult(result)
-                    camera = vm.cameraPosition(centeredOn: result.coordinate)
-                    isSearchFocused = false
-                    withAnimation(.snappy) {
-                        sheetState = .expanded
-                    }
+                    selectSearchResult(result)
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "magnifyingglass.circle.fill")
@@ -400,19 +458,18 @@ struct HistoryMapView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .highPriorityGesture(
+                    TapGesture().onEnded {
+                        selectSearchResult(result)
+                    }
+                )
             }
         }
     }
 
     private func personalHistorySpotButton(for group: ParkingSpotGroup) -> some View {
         Button {
-            detailReturnState = sheetState == .collapsed ? .medium : sheetState
-            vm.selectGroup(group)
-            camera = vm.cameraPosition(centeredOn: group.coordinate)
-            isSearchFocused = false
-            withAnimation(.snappy) {
-                sheetState = .expanded
-            }
+            openSpotDetail(group)
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "mappin.circle.fill")
@@ -450,6 +507,11 @@ struct HistoryMapView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
+        .highPriorityGesture(
+            TapGesture().onEnded {
+                openSpotDetail(group)
+            }
+        )
         .accessibilityIdentifier(A11y.historyPersonalSpotButton)
     }
 
@@ -484,7 +546,8 @@ struct HistoryMapView: View {
                 Button {
                     vm.clearSearch()
                     detailReturnState = nil
-                    camera = vm.defaultCameraPosition()
+                    dismissKeyboard()
+                    setMapCamera(HistoryMapViewModel.userLocationCameraPosition())
                     withAnimation(.snappy) {
                         sheetState = .collapsed
                     }
@@ -513,8 +576,79 @@ struct HistoryMapView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
+    @ViewBuilder
+    private func searchThisAreaButton(in proxy: GeometryProxy) -> some View {
+        if shouldDisplaySearchThisAreaButton {
+            VStack {
+                HStack {
+                    Spacer()
+
+                    Button {
+                        searchThisMapArea()
+                    } label: {
+                        Label("Search This Area", systemImage: "magnifyingglass")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.primary)
+                    .background(.regularMaterial)
+                    .clipShape(Capsule(style: .continuous))
+                    .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+                    .accessibilityIdentifier(A11y.historySearchThisAreaButton)
+
+                    Spacer()
+                }
+                .padding(.top, max(proxy.safeAreaInsets.top, 10))
+
+                Spacer()
+            }
+            .transition(.opacity.combined(with: .move(edge: .top)))
+            .animation(.snappy, value: shouldDisplaySearchThisAreaButton)
+        }
+    }
+
+    private func relocateButton(in proxy: GeometryProxy) -> some View {
+        VStack {
+            Spacer()
+
+            HStack {
+                Spacer()
+
+                Button {
+                    relocateToCurrentLocation()
+                } label: {
+                    ZStack {
+                        Image(systemName: "location.fill")
+                            .font(.title3.weight(.semibold))
+                            .opacity(isRelocating ? 0 : 1)
+
+                        if isRelocating {
+                            ProgressView()
+                        }
+                    }
+                    .frame(width: 46, height: 46)
+                }
+                .disabled(isRelocating)
+                .foregroundStyle(.blue)
+                .background(.regularMaterial)
+                .clipShape(Circle())
+                .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+                .accessibilityLabel("Relocate to current location")
+                .accessibilityIdentifier(A11y.historyRelocateButton)
+            }
+            .padding(.trailing, 18)
+            .padding(.bottom, sheetHeight(for: sheetState, in: proxy) + 18)
+        }
+        .animation(.snappy, value: sheetState)
+    }
+
     private var sheetDragGesture: some Gesture {
         DragGesture(minimumDistance: 8)
+            .onChanged { _ in
+                dismissKeyboard()
+            }
             .updating($sheetDragOffset) { value, state, _ in
                 state = value.translation.height
             }
@@ -531,8 +665,10 @@ struct HistoryMapView: View {
     }
 
     private func runSearch() {
+        dismissKeyboard()
         vm.clearSelection()
         detailReturnState = nil
+        shouldShowSearchThisArea = false
         withAnimation(.snappy) {
             sheetState = .expanded
         }
@@ -541,8 +677,89 @@ struct HistoryMapView: View {
             let results = await vm.searchAddressResults()
             if results.count == 1, let result = results.first {
                 vm.selectSearchResult(result)
-                camera = vm.cameraPosition(centeredOn: result.coordinate)
+                withAnimation(.snappy) {
+                    setMapCamera(vm.cameraPositionForSelectedRange(fallbackCenter: lastKnownUserCoordinate))
+                }
             }
+        }
+    }
+
+    private func selectSearchResult(_ result: HistoryMapSearchResult) {
+        vm.selectSearchResult(result)
+        shouldShowSearchThisArea = false
+        withAnimation(.snappy) {
+            setMapCamera(vm.cameraPositionForSelectedRange(fallbackCenter: lastKnownUserCoordinate))
+        }
+        dismissKeyboard()
+
+        withAnimation(.snappy) {
+            sheetState = .expanded
+        }
+    }
+
+    private func selectSearchRadius(_ radius: HistorySearchRadius) {
+        withAnimation(.snappy) {
+            vm.selectedRangeMeters = radius.distance
+            setMapCamera(vm.cameraPositionForSelectedRange(fallbackCenter: lastKnownUserCoordinate))
+        }
+    }
+
+    private func openSpotDetail(_ group: ParkingSpotGroup) {
+        detailReturnState = sheetState == .collapsed ? .medium : sheetState
+        vm.selectGroup(group)
+        shouldShowSearchThisArea = false
+        setMapCamera(vm.cameraPosition(centeredOn: group.coordinate))
+        dismissKeyboard()
+
+        withAnimation(.snappy) {
+            sheetState = .expanded
+        }
+    }
+
+    private func relocateToCurrentLocation() {
+        guard !isRelocating else { return }
+        isRelocating = true
+        dismissKeyboard()
+        detailReturnState = nil
+        shouldShowSearchThisArea = false
+        setMapCamera(HistoryMapViewModel.userLocationCameraPosition())
+
+        Task {
+            defer { isRelocating = false }
+
+            guard let coordinate = await locationService.currentCoordinateOnce() else {
+                lastKnownUserCoordinate = nil
+                vm.relocateToTorontoFallback()
+                setMapCamera(vm.cameraPositionForSelectedRange(fallbackCenter: nil))
+                withAnimation(.snappy) {
+                    sheetState = .medium
+                }
+                return
+            }
+
+            lastKnownUserCoordinate = coordinate
+            vm.relocateToCurrentLocation(coordinate)
+            setMapCamera(vm.cameraPositionForSelectedRange(fallbackCenter: coordinate))
+
+            withAnimation(.snappy) {
+                sheetState = .medium
+            }
+        }
+    }
+
+    private func requestInitialLocationFocusIfNeeded() {
+        guard !hasRequestedInitialLocationFocus else { return }
+        hasRequestedInitialLocationFocus = true
+        setMapCamera(HistoryMapViewModel.userLocationCameraPosition())
+
+        Task {
+            guard let coordinate = await locationService.currentCoordinateOnce() else {
+                setMapCamera(HistoryMapViewModel.torontoFallbackCameraPosition())
+                return
+            }
+
+            lastKnownUserCoordinate = coordinate
+            vm.relocateToCurrentLocation(coordinate)
         }
     }
 
@@ -550,22 +767,77 @@ struct HistoryMapView: View {
         let nextState = detailReturnState ?? .collapsed
         detailReturnState = nil
         vm.clearSelection()
-        isSearchFocused = false
+        dismissKeyboard()
 
         withAnimation(.snappy) {
             sheetState = nextState
         }
     }
 
+    private func searchThisMapArea() {
+        guard let center = visibleMapCenter else { return }
+        vm.searchThisMapArea(center: center)
+        shouldShowSearchThisArea = false
+        dismissKeyboard()
+
+        withAnimation(.snappy) {
+            sheetState = .medium
+        }
+    }
+
+    private func handleMapCameraChange(_ context: MapCameraUpdateContext) {
+        let center = context.region.center
+        visibleMapCenter = center
+
+        guard Date() >= ignoreCameraChangesUntil else { return }
+        guard vm.selectedGroup == nil else { return }
+        guard isMeaningfullyAwayFromReference(center) else {
+            shouldShowSearchThisArea = false
+            return
+        }
+
+        shouldShowSearchThisArea = true
+    }
+
+    private func isMeaningfullyAwayFromReference(_ coordinate: CLLocationCoordinate2D) -> Bool {
+        let reference = vm.searchCenter ?? lastKnownUserCoordinate ?? HistoryMapViewModel.torontoFallbackCoordinate
+        let currentLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        let referenceLocation = CLLocation(latitude: reference.latitude, longitude: reference.longitude)
+        return currentLocation.distance(from: referenceLocation) > 75
+    }
+
+    private func setMapCamera(_ position: MapCameraPosition) {
+        ignoreCameraChangesUntil = Date().addingTimeInterval(1.2)
+        shouldShowSearchThisArea = false
+        camera = position
+    }
+
+    private func dismissKeyboard() {
+        isSearchFocused = false
+    }
+
+    private func updateKeyboardHeight(from notification: Notification) {
+        guard let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+            return
+        }
+
+        let nextHeight = max(0, UIScreen.main.bounds.height - endFrame.minY)
+        withAnimation(.snappy) {
+            keyboardHeight = nextHeight
+        }
+    }
+
     private func sheetHeight(for state: MapSheetState, in proxy: GeometryProxy) -> CGFloat {
         let availableHeight = proxy.size.height
+        let safeBottom = max(proxy.safeAreaInsets.bottom, 8)
+
         switch state {
         case .collapsed:
-            return 118 + max(proxy.safeAreaInsets.bottom, 8)
+            return 106 + safeBottom
         case .medium:
-            return min(320, availableHeight * 0.42)
+            return min(max(286, availableHeight * 0.38), availableHeight * 0.52)
         case .expanded:
-            return max(360, availableHeight * 0.78)
+            return min(max(380, availableHeight * 0.78), availableHeight - 14)
         }
     }
 
@@ -582,9 +854,19 @@ struct HistoryMapView: View {
         return "\(count) saved spot\(count == 1 ? "" : "s") nearby"
     }
 
-    private func markerTitle(for group: ParkingSpotGroup) -> String {
-        group.count <= 1 ? group.displayName : "\(group.displayName) (\(group.count))"
+    private var shouldDisplaySearchThisAreaButton: Bool {
+        shouldShowSearchThisArea
+        && vm.selectedGroup == nil
+        && sheetState != .expanded
+        && !isRelocating
     }
+
+    private var shouldDisplayRelocateButton: Bool {
+        sheetState != .expanded
+        && !isSearchFocused
+        && vm.selectedGroup == nil
+    }
+
 }
 
 private enum MapSheetState {

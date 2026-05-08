@@ -35,6 +35,11 @@ Current UX decision: History is map-only. The old History list was removed becau
 - `docs/phase2/PHASE2_SELF_TEST.md` - Clawdbot Phase 2 self-test runbook and reporting instructions.
 - `docs/phase2/PHASE2_ROADMAP.md` - Phase 2 product roadmap and implementation order.
 - `docs/phase2/PHASE2_ARCHITECTURE_REVIEW.md` - Phase 2 architecture risks, sequencing, and preparation notes.
+- `docs/phase2/PHASE2_PRIVACY_DATA_BOUNDARY.md` - local-only privacy rules for location-derived Phase 2 assistant behavior.
+- `docs/phase2/PHASE2_WIDGET_SHARED_STATE_DECISION.md` - App Group/shared-state decision for current Live Activities and future widgets.
+- `docs/phase2/PHASE2_TEST_QA_THREAD.md` - Phase 2 Test/QA thread rules, report format, and Debug-thread handoff format.
+- `docs/phase2/PHASE2_DEVELOPMENT_THREAD_RESPONSIBILITY.md` - main Phase 2 development-thread responsibility, documentation rules, and Test handoff template.
+- `docs/phase2/PHASE2_DEBUG_THREAD_RESPONSIBILITY.md` - Phase 2 debug-thread responsibility, bug investigation format, and fix recommendation template.
 - `Self_report/phase1/runs/` - Phase 1 self-test report output folders.
 - `Self_report/phase2/runs/` - reserved Phase 2 self-test report output folders.
 - `scripts/generate_phase1_report.py` - dependency-free report generator.
@@ -49,6 +54,9 @@ Current UX decision: History is map-only. The old History list was removed becau
 - `LocationService` captures location once when starting a session.
 - `HistoryMapView` is the only History UI now.
 - `HistoryMapViewModel` groups saved sessions, asks an injectable map search provider for address results, filters nearby history within 1 km, and drives selected marker state.
+- `HistoryMapFilteringService` applies pure saved-history filtering for local text search, nearby radius results, and personal metadata filters.
+- `HistoryMapMarkerItem` gives map markers explicit layer/source identity so future public parking layers do not mix directly with personal-history groups.
+- `PublicParkingLot`, `GreenPParkingLot`, and related source/rate/availability models are dormant Phase 2 architecture for future public parking research; they are not wired into UI or data loading.
 - `MapKitSearchProvider` is the production address search adapter over `MKLocalSearch`; tests can inject fake providers without network/MapKit search.
 - `ParkingSpotGroupingService` groups nearby sessions into a single marker using a simple 30 m threshold.
 - `ParkingSpotDetailSheetView` shows grouped spot details, recent sessions, notes, counts, lat/lon, and Apple/Google Maps actions.
@@ -293,6 +301,103 @@ Manual verification still needed:
 - Continued the personal metadata slice with local Map filter chips for All, Favorites, 4+ Stars, and supported tags.
 - Metadata filters compose with address radius search and local saved-history search, while keeping markers/results inside the Map bottom-sheet workflow.
 - Added focused unit coverage for favorite-only filtering and metadata filters combined with nearby address radius filtering.
+- Continued Quick Start polish with a local recent-duration option derived from the most recent completed session.
+- Quick Start still keeps the 30 min, 1 hr, and 2 hr defaults, and only adds a rounded recent duration when it is not already one of those defaults.
+- The Home Quick Start row now scrolls horizontally so additional local presets do not crowd the main screen.
+- Added focused unit coverage for recent-duration Quick Start suggestions and confirmed the suggested duration still uses the shared `ParkingSessionDraft.quickStart` path.
+- Created `docs/phase2/PHASE2_DEBUG_THREAD_RESPONSIBILITY.md` for the Phase 2 Debug thread.
+- Debug thread scope is now documented as bug investigation and targeted fixes only, using the required issue summary/root cause/affected files/fix strategy/regression risk/retest recommendation format.
+- Fixed the Phase 2 Live Activity stale-status bug in the Debug thread.
+- Live Activity content state is now date-driven with session ID, location name, start date, scheduled end date, and last updated date; the widget no longer depends on stored formatted countdown strings.
+- Dynamic Island and Lock Screen status/timer now render from `ContentState.scheduledEndDate`, so status can transition while the app is locked/suspended.
+- Removed foreground timer-driven `Activity.update` calls from `ParkingSessionStore`; Live Activity updates are now reserved for real events such as start, add time, end, and launch reconciliation.
+- Added local add-time store support that persists the new scheduled end date, reschedules local notifications, and publishes a date-driven Live Activity update.
+- App launch reconciliation now restores/updates the active Live Activity when an active session exists, and asks ActivityKit to end orphaned activities when no active session exists.
+- Added focused regression coverage for date-driven ActivityKit payload, add-time Live Activity updates, and no-active-session orphan cleanup.
+- Added `docs/phase2/PHASE2_DEVELOPMENT_THREAD_RESPONSIBILITY.md` to define this thread as the main Phase 2 development thread, including required change records and the Test Handoff Document template.
+- Updated the Phase 2 development-thread responsibility so this thread is development-only: it records design/implementation and handoff summaries, while Test/QA owns test-case creation, test-document updates, QA runs, and formal reports.
+- Continued Phase 2 map architecture preparation by extracting pure saved-history filtering from `HistoryMapViewModel` into `HistoryMapFilteringService`.
+- Local text search, address-radius filtering, and metadata filter chips now share the same testable filtering service while keeping the existing Map UI behavior unchanged.
+- Added direct unit coverage for filtering service metadata text matching and nearby metadata-filter composition.
+- Created Test Handoff: `docs/phase2/handoffs/20260501_1545_history_map_filtering_service_TEST_HANDOFF.md`.
+- Continued Phase 2 map-layer architecture preparation by adding `HistoryMapMarkerItem` and `HistoryMapLayerKind`.
+- Personal history markers and the search-area marker now have explicit layer/source identity while preserving the current Map UI behavior.
+- Created Test Handoff: `docs/phase2/handoffs/20260501_1605_history_map_layer_model_TEST_HANDOFF.md`.
+- Continued Phase 2 public parking architecture preparation by adding dormant `ParkingSource`, `PublicParkingLot`, and `GreenPParkingLot` model types.
+- Public parking availability now has explicit semantics so the app cannot claim real-time availability unless both the source and lot availability are official real-time.
+- No Green P/public parking UI, bundled data, network loading, backend, cloud, analytics, ML, payment, or production layer was added.
+- Created Test Handoff: `docs/phase2/handoffs/20260502_0929_public_parking_models_TEST_HANDOFF.md`.
+- Continued Phase 2 architecture preparation with `docs/phase2/PHASE2_PRIVACY_DATA_BOUNDARY.md`.
+- Documented hard local-only privacy rules for parking sessions, one-shot location, Live Activity payloads, personal spot metadata, Quick Start suggestions, Map search state, and future public parking source metadata.
+- Marked the roadmap privacy-notes checklist item complete; this was documentation-only and did not change app UI, storage, networking, tests, backend, cloud, analytics, ML, or community behavior.
+- Created Test Handoff: `docs/phase2/handoffs/20260502_0934_privacy_data_boundary_TEST_HANDOFF.md`.
+- Continued Phase 2 Live Activity/widget architecture design with `docs/phase2/PHASE2_WIDGET_SHARED_STATE_DECISION.md`.
+- Decided the current Phase 2 Live Activity does not need App Group shared storage because ActivityKit content state already carries the minimal extension-safe display payload.
+- Documented future App Group review triggers for regular widgets, widget controls, saved/favorite spot widgets, persisted widget preferences, or public parking provider caches.
+- Updated the roadmap, architecture review, Live Activity spike notes, and Phase 2 document index with the shared-state decision.
+- Created Test Handoff: `docs/phase2/handoffs/20260502_1142_widget_shared_state_decision_TEST_HANDOFF.md`.
+- Continued Phase 2 personal spot metadata polish by exposing the existing local-only saved spot `displayName` field in the Map detail sheet.
+- The Personal Details section now includes a `Spot name` field alongside favorite, rating, tags, and spot note.
+- Custom spot names remain local-only, persist through the existing saved-spot metadata envelope, and stay inside the map-only History workflow.
+- Added accessibility ID `spotDetail.displayName` for the new field.
+- Created Test Handoff: `docs/phase2/handoffs/20260502_1650_personal_spot_display_name_TEST_HANDOFF.md`.
+- Added a floating Map relocate button that requests current location once, recenters the map, and reuses the existing nearby saved-history radius/filter workflow.
+- Passed the existing `LocationServiceProtocol` from `ContentView` into the Map tab instead of creating a new location service.
+- Added accessibility ID `history.relocateButton` for the relocate control.
+- Relocation remains local-only and does not add continuous/background location tracking.
+- Created Test Handoff: `docs/phase2/handoffs/20260502_1901_map_relocate_button_TEST_HANDOFF.md`.
+- Improved real-device Map startup behavior so the Map tab always renders a map, shows `UserAnnotation()`, starts with `MapCameraPosition.userLocation(followsHeading:fallback:)`, and falls back to Toronto if location is denied or unavailable.
+- Toronto fallback is latitude `43.6532`, longitude `-79.3832`, with `0.03` latitude/longitude span.
+- Fixed one-shot permission timing in `LocationService` so a fresh When In Use grant can request location after authorization changes instead of racing the prompt.
+- Created Test Handoff: `docs/phase2/handoffs/20260502_1909_map_initial_location_behavior_TEST_HANDOFF.md`.
+
+2026-05-05:
+
+- Fixed the Map/History detail sheet layout and keyboard bug from the Phase 2 Debug thread.
+- The Map bottom sheet now reserves extra scrollable bottom space so detail-sheet action buttons are not hidden by the floating tab bar or home indicator.
+- The bottom sheet now lifts above the keyboard, keeping search results and Personal History rows physically tappable while the search field is focused.
+- Added a keyboard `Done` toolbar for the Map search field and kept keyboard dismissal on map tap, sheet drag, and search submit.
+- Kept the map-only History workflow intact; no old History list, backend, cloud, ML, analytics, or continuous background location behavior was added.
+- Updated `docs/phase2/PHASE2_SELF_TEST.md` with keyboard, safe-area, and small-screen manual checks for `P2-TC-09`.
+- Focused search-to-detail UI regression passed on iPhone 17 Pro Simulator: `Phase1UITests.test_Phase2HistoryMapSearch_LocalNoteSearchOpensMatchingSpotDetail`.
+- Focused detail action visibility UI regression passed on iPhone 17 Pro Simulator: `Phase1UITests.test_TC11_TC12_MapDetailSheet_ShowsSpotInfoAndActions`.
+- Fixed the Phase 1 / Phase 1.1 regression bundle before deeper Phase 2 work:
+  - Quick Start now always creates sessions named `Quick Start` instead of reusing the most recent saved spot name.
+  - Manual Start now supports precise custom duration selection with hour/minute wheels plus 15 min, 30 min, 1 hr, and 2 hr presets.
+  - Invalid zero-minute session drafts are rejected at the store boundary.
+  - Map address search now keeps Personal History visible, ranks nearby saved spots by distance from the selected result, and fits the map camera to the selected result plus nearby history markers.
+  - Search result camera range now respects broad MapKit result regions when available and uses a close range for specific address results.
+  - Live Activity / Dynamic Island state was rechecked against the date-driven contract: ActivityKit content remains based on session ID, location name, start date, scheduled end date, and last-updated date, with updates only on real session events.
+- Updated `docs/phase1/PHASE1_SELF_TEST.md` and `docs/phase2/PHASE2_SELF_TEST.md` with the new Quick Start, map search, Live Activity, and Manual Start regression checks.
+- Fixed the Map range-filter camera-scale bug from the Phase 2 Debug thread.
+- The Map already used a mutable `Map(position: $camera)` binding; the missing behavior was that radius button taps updated filtering only, not camera zoom.
+- `HistoryMapViewModel.selectedRangeMeters` now drives both nearby-history filtering and range-camera construction.
+- Tapping 500 m, 1 km, or 2 km now animates the map camera around the active search/current-location center using the selected range.
+- Selecting a search result now recenters with the current selected range while keeping nearby Personal History visible inside the map workflow.
+- Added unit coverage for selected-range camera scale and selected-result centering.
+
+2026-05-06:
+
+- Continued Phase 2 Map polish with an Apple Maps-style `Search This Area` control.
+- `HistoryMapView` now tracks the visible map center from SwiftUI MapKit camera updates and shows a compact floating `Search This Area` button after manual pan/zoom.
+- The button is hidden while a spot detail is open, while relocation is running, or when the bottom sheet is expanded enough to cover the useful map area.
+- Tapping `Search This Area` uses the current visible map center as the local search center, clears address result rows, keeps the selected radius, preserves metadata filters, and refreshes nearby Personal History markers.
+- Recenter remains unchanged: it still uses current location or Toronto fallback, while `Search This Area` uses the visible map center.
+- Added accessibility ID `history.searchThisAreaButton`.
+- Added focused unit coverage for nearby filtering, metadata-filter preservation, and clearing address results.
+- Created Test Handoff: `docs/phase2/handoffs/20260506_1413_map_search_this_area_TEST_HANDOFF.md`.
+- Focused Search This Area unit verification passed: 3 tests, 0 failures, on iPhone 17 Pro Simulator.
+- Build-for-testing verification passed after the Search This Area slice: `xcodebuild build-for-testing ... -derivedDataPath /tmp/SmartParkingReminderSearchThisAreaBuild`.
+- Started the Phase 2 release-candidate polish pass while Test/QA and Debug can continue in parallel.
+- Tightened the Map bottom sheet states so collapsed is smaller, medium shows a lighter preview, expanded remains the full search/history state, and floating controls avoid covered/detail/keyboard-heavy states.
+- Reduced medium-sheet Personal History preview density to keep the map-first workflow dominant.
+- Polished the saved-spot metadata section to read as a lightweight local saved-spot editor instead of a heavy form, while keeping spot name, favorite, rating, tags, and note local-only.
+- Polished Quick Start visual treatment so it stays compact and secondary to the full Start Parking flow while still using the shared `ParkingSessionDraft.quickStart` path.
+- Polished Lock Screen Live Activity code-side presentation by aligning the status row and applying the date-derived status color to the parking label; Dynamic Island remains icon plus timer only.
+- Added `docs/phase2/PHASE2_RELEASE_CANDIDATE_CHECKLIST.md`.
+- Created Test Handoff: `docs/phase2/handoffs/20260506_1526_phase2_release_candidate_polish_TEST_HANDOFF.md`.
+- Build-for-testing verification passed after the release-candidate polish pass: `xcodebuild build-for-testing ... -derivedDataPath /tmp/SmartParkingReminderPhase2RCPolishBuild`.
+- Focused release-candidate UI sanity verification passed: Quick Start, Map detail content/actions, and History detail Back flow, 3 UI tests, 0 failures.
 
 ## Testing
 
@@ -345,6 +450,26 @@ Latest Phase 2 focused Quick Start UI check:
 - Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:SmartParkingReminderUITests/Phase1UITests/test_Phase2QuickStart_ThirtyMinutesStartsActiveSession -derivedDataPath /tmp/SmartParkingReminderQuickStartUITests2`
 - Result: `** TEST SUCCEEDED **`
 - UI tests: 1 passed, 0 failed.
+
+Latest Phase 2 Search This Area check:
+
+- Unit command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:SmartParkingReminderTests/Phase1ModelAndLogicTests/test_Phase2HistoryMapSearch_SearchThisAreaFiltersNearbyHistory -only-testing:SmartParkingReminderTests/Phase1ModelAndLogicTests/test_Phase2HistoryMapSearch_SearchThisAreaPreservesMetadataFilter -only-testing:SmartParkingReminderTests/Phase1ModelAndLogicTests/test_Phase2HistoryMapSearch_SearchThisAreaClearsAddressResults -derivedDataPath /tmp/SmartParkingReminderSearchThisAreaUnitTests`
+- Unit result: `** TEST SUCCEEDED **`
+- Unit tests: 3 passed, 0 failed.
+- Build command: `xcodebuild build-for-testing -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/SmartParkingReminderSearchThisAreaBuild`
+- Build result: `** TEST BUILD SUCCEEDED **`
+
+Latest Phase 2 release-candidate polish build check:
+
+- Command: `xcodebuild build-for-testing -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/SmartParkingReminderPhase2RCPolishBuild`
+- Result: `** TEST BUILD SUCCEEDED **`
+- Coverage: app target, unit/UI test bundles, and embedded `SmartParkingReminderWidgetExtension.appex`.
+
+Latest Phase 2 release-candidate focused UI sanity check:
+
+- Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:SmartParkingReminderUITests/Phase1UITests/test_Phase2QuickStart_ThirtyMinutesStartsActiveSession -only-testing:SmartParkingReminderUITests/Phase1UITests/test_TC11_TC12_MapDetailSheet_ShowsSpotInfoAndActions -only-testing:SmartParkingReminderUITests/Phase1UITests/test_Phase1HistoryDetail_BackReturnsToHistoryPanel -derivedDataPath /tmp/SmartParkingReminderPhase2RCPolishUITests`
+- Result: `** TEST SUCCEEDED **`
+- UI tests: 3 passed, 0 failed.
 
 Latest Phase 2 Live Activity build check:
 
@@ -418,6 +543,129 @@ Latest Phase 2 full unit check after personal metadata filters:
 - Result: `** TEST SUCCEEDED **`
 - Unit tests: 39 passed, 0 failed.
 
+Latest Phase 2 focused Quick Start recent-duration check:
+
+- Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:SmartParkingReminderTests/Phase1StorageAndStoreTests/test_Phase2QuickStartDurationOptions_IncludeRecentNonDefaultDuration -derivedDataPath /tmp/SmartParkingReminderQuickStartRecentDurationTests`
+- Result: `** TEST SUCCEEDED **`
+- Unit tests: 1 passed, 0 failed.
+
+Latest Phase 2 full unit check after Quick Start recent-duration polish:
+
+- Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:SmartParkingReminderTests -derivedDataPath /tmp/SmartParkingReminderQuickStartRecentDurationUnitTests`
+- Result: `** TEST SUCCEEDED **`
+- Unit tests: 40 passed, 0 failed.
+
+Latest Phase 2 Live Activity date-driven stale-status fix check:
+
+- Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:SmartParkingReminderTests/Phase1StorageAndStoreTests/test_Phase2ActivityKitPayload_MapsPrivacySafeSnapshot -only-testing:SmartParkingReminderTests/Phase1StorageAndStoreTests/test_Phase2ActivityLifecycle_AddTimePublishesDateDrivenUpdateAndReschedulesNotifications -only-testing:SmartParkingReminderTests/Phase1StorageAndStoreTests/test_Phase2ActivityLifecycle_RestoreWithoutActiveSessionEndsOrphanedActivities -only-testing:SmartParkingReminderTests/Phase1StorageAndStoreTests/test_Phase2ActivityLifecycle_RestoreActiveSessionPublishesRestoredSnapshot -derivedDataPath /tmp/SmartParkingReminderLiveActivityDateDrivenTests`
+- Result: `** TEST SUCCEEDED **`
+- Unit tests: 4 passed, 0 failed.
+
+Latest Phase 2 full unit check after Live Activity date-driven stale-status fix:
+
+- Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:SmartParkingReminderTests -derivedDataPath /tmp/SmartParkingReminderLiveActivityDateDrivenUnitTests`
+- Result: `** TEST SUCCEEDED **`
+- Unit tests: 44 passed, 0 failed.
+
+Latest Phase 2 focused History filtering service check:
+
+- Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:SmartParkingReminderTests/Phase1ModelAndLogicTests/test_Phase2HistoryMapFilteringService_LocalQueryIncludesMetadataFields -only-testing:SmartParkingReminderTests/Phase1ModelAndLogicTests/test_Phase2HistoryMapFilteringService_NearbyFilterComposesWithMetadataFilter -only-testing:SmartParkingReminderTests/Phase1ModelAndLogicTests/test_Phase2PersonalSpotMetadataFilter_ComposesWithAddressRadius -only-testing:SmartParkingReminderTests/Phase1ModelAndLogicTests/test_Phase2HistoryMapSearch_LocalQueryFiltersSavedSpotNamesAndNotes -derivedDataPath /tmp/SmartParkingReminderHistoryFilterServiceTests`
+- Result: `** TEST SUCCEEDED **`
+- Unit tests: 4 passed, 0 failed.
+
+Latest Phase 2 full unit check after History filtering service extraction:
+
+- Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:SmartParkingReminderTests -derivedDataPath /tmp/SmartParkingReminderHistoryFilterServiceUnitTests`
+- Result: `** TEST SUCCEEDED **`
+- Unit tests: 42 passed, 0 failed.
+
+Latest Phase 2 History map layer-model compile check:
+
+- Command: `xcodebuild build-for-testing -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/SmartParkingReminderHistoryLayerModelBuild`
+- Result: `** TEST BUILD SUCCEEDED **`
+- Scope: compile/build verification only; no formal QA or new test cases were created by the development thread.
+
+Latest Phase 2 dormant public parking model compile check:
+
+- Command: `xcodebuild build-for-testing -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/SmartParkingReminderPublicParkingModelsBuild`
+- Result: `** TEST BUILD SUCCEEDED **`
+- Scope: compile/build verification only; no Green P/public parking UI, data loading, formal QA, or new test cases were created by the development thread.
+
+Latest Phase 2 privacy data-boundary update:
+
+- Added `docs/phase2/PHASE2_PRIVACY_DATA_BOUNDARY.md`.
+- Updated roadmap and architecture review docs.
+- Created handoff `docs/phase2/handoffs/20260502_0934_privacy_data_boundary_TEST_HANDOFF.md`.
+- Scope: documentation/design only; no build or formal QA needed because no app code changed.
+
+Latest Phase 2 widget shared-state decision update:
+
+- Added `docs/phase2/PHASE2_WIDGET_SHARED_STATE_DECISION.md`.
+- Current decision: no App Group shared container is needed for the Phase 2 Live Activity; ActivityKit content state remains the extension boundary.
+- Updated roadmap, architecture review, Live Activity spike notes, and Phase 2 docs index.
+- Created handoff `docs/phase2/handoffs/20260502_1142_widget_shared_state_decision_TEST_HANDOFF.md`.
+- Scope: documentation/design only; no build or formal QA needed because no app code changed.
+
+Latest Phase 2 personal spot display-name polish:
+
+- Added a `Spot name` field to the existing Map spot detail Personal Details section.
+- Changed files: `AccessibilityIDs.swift`, `ParkingSpotDetailSheetView.swift`, `PHASE2_ROADMAP.md`, and the handoff below.
+- Created handoff `docs/phase2/handoffs/20260502_1650_personal_spot_display_name_TEST_HANDOFF.md`.
+- Build check command: `xcodebuild build-for-testing -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/SmartParkingReminderSpotDisplayNameBuild`
+- Build check result: `** TEST BUILD SUCCEEDED **`
+- Scope: small UI/code polish using existing local metadata storage; no new storage model, no History list, no backend/cloud/ML/analytics/community behavior, and no formal QA run by the development thread.
+
+Latest Phase 2 Map relocate button:
+
+- Added a floating current-location button to the Map screen.
+- Changed files: `AccessibilityIDs.swift`, `ContentView.swift`, `HistoryView.swift`, `HistoryMapViewModel.swift`, `HistoryMapView.swift`, `PHASE2_ROADMAP.md`, and the handoff below.
+- Created handoff `docs/phase2/handoffs/20260502_1901_map_relocate_button_TEST_HANDOFF.md`.
+- Build check command: `xcodebuild build-for-testing -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/SmartParkingReminderMapRelocateBuild`
+- Build check result: `** TEST BUILD SUCCEEDED **`
+- Scope: one-shot location only; no continuous/background location, backend, cloud, ML, analytics, community behavior, or old History list.
+
+Latest Phase 2 / Phase 1 Map initial-location behavior improvement:
+
+- Map now opens as a real map even when no saved history exists.
+- Added `UserAnnotation()` so the user location dot is visible when permission is available.
+- Initial camera now uses `MapCameraPosition.userLocation(followsHeading: true, fallback: Toronto)`.
+- Recenter uses current location when available and Toronto fallback when denied/unavailable.
+- Changed files: `LocationService.swift`, `HistoryMapViewModel.swift`, `HistoryMapView.swift`, `PHASE2_ROADMAP.md`, and the handoff below.
+- Created handoff `docs/phase2/handoffs/20260502_1909_map_initial_location_behavior_TEST_HANDOFF.md`.
+- Build check command: `xcodebuild build-for-testing -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/SmartParkingReminderMapInitialLocationBuild`
+- Build check result: `** TEST BUILD SUCCEEDED **`
+- Scope: one-shot foreground location only; no continuous/background location, backend, cloud, ML, analytics, community behavior, or old History list.
+
+Latest Phase 2 Map sheet keyboard/safe-area fix:
+
+- Changed `HistoryMapView` so the bottom sheet reserves 116 pt of bottom scroll space, lifts above the keyboard, and keeps history/search row taps responsive while the keyboard is up.
+- Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:SmartParkingReminderUITests/Phase1UITests/test_Phase2HistoryMapSearch_LocalNoteSearchOpensMatchingSpotDetail -only-testing:SmartParkingReminderUITests/Phase1UITests/test_TC11_TC12_MapDetailSheet_ShowsSpotInfoAndActions -derivedDataPath /tmp/SmartParkingReminderMapKeyboardSafeAreaFinalUITests`
+- Result: `** TEST SUCCEEDED **`
+- UI tests: 2 passed, 0 failed.
+- Xcode result bundle: `/tmp/SmartParkingReminderMapKeyboardSafeAreaFinalUITests/Logs/Test/Test-SmartParkingReminder-2026.05.05_10-03-29--0400.xcresult`
+
+Latest Phase 2 / Phase 1.1 regression bundle check:
+
+- Scope: date-driven Live Activity regression coverage, Quick Start fixed naming, Manual Start precise duration, Map search camera fitting, and nearby Personal History preservation.
+- Focused unit command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:SmartParkingReminderTests/Phase1StorageAndStoreTests/test_Phase2QuickStartDraft_UsesSameSessionCreationPath -only-testing:SmartParkingReminderTests/Phase1StorageAndStoreTests/test_Phase1QuickStartName_DoesNotReuseMostRecentSessionLocation -only-testing:SmartParkingReminderTests/Phase1StorageAndStoreTests/test_Phase2QuickStartDurationOptions_IncludeRecentNonDefaultDuration -only-testing:SmartParkingReminderTests/Phase1StorageAndStoreTests/test_Phase1ManualStartCustomDuration_UsesSelectedDurationForScheduleAndActivity -only-testing:SmartParkingReminderTests/Phase1StorageAndStoreTests/test_Phase1ManualStartInvalidZeroDuration_DoesNotCreateSession -only-testing:SmartParkingReminderTests/Phase1StorageAndStoreTests/test_Phase2ActivityLifecycle_AddTimePublishesDateDrivenUpdateAndReschedulesNotifications -only-testing:SmartParkingReminderTests/Phase1ModelAndLogicTests/test_Phase1MapSearch_AddressResultsDoNotHidePersonalHistoryBeforeSelection -only-testing:SmartParkingReminderTests/Phase1ModelAndLogicTests/test_Phase1MapSearch_SelectedAddressRanksNearbyHistoryByDistance -only-testing:SmartParkingReminderTests/Phase1ModelAndLogicTests/test_Phase1MapSearch_CameraUsesBroadResultRegionWhenProvided -only-testing:SmartParkingReminderTests/Phase1ModelAndLogicTests/test_Phase1MapSearch_CameraFramesSelectedResultAndNearbyHistory -derivedDataPath /tmp/SmartParkingReminderPhase1IssuesUnitTests`
+- Focused unit result: `** TEST SUCCEEDED **`; 10 tests passed, 0 failed.
+- Full unit command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:SmartParkingReminderTests -derivedDataPath /tmp/SmartParkingReminderPhase1IssuesFullUnitTests`
+- Full unit result: `** TEST SUCCEEDED **`; 50 tests passed, 0 failed.
+- Focused UI command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:SmartParkingReminderUITests/Phase1UITests/test_TC01_StartSession_ShowsActiveSessionAndCountdown -only-testing:SmartParkingReminderUITests/Phase1UITests/test_Phase2QuickStart_ThirtyMinutesStartsActiveSession -only-testing:SmartParkingReminderUITests/Phase1UITests/test_Phase2HistoryMapSearch_LocalNoteSearchOpensMatchingSpotDetail -derivedDataPath /tmp/SmartParkingReminderPhase1IssuesUITests`
+- Focused UI result: `** TEST SUCCEEDED **`; 3 tests passed, 0 failed.
+- Xcode result bundles: `/tmp/SmartParkingReminderPhase1IssuesFullUnitTests/Logs/Test/Test-SmartParkingReminder-2026.05.05_11-59-09--0400.xcresult` and `/tmp/SmartParkingReminderPhase1IssuesUITests/Logs/Test/Test-SmartParkingReminder-2026.05.05_12-01-37--0400.xcresult`.
+
+Latest Phase 2 Map range camera-scale fix:
+
+- Changed `HistoryMapViewModel` and `HistoryMapView` so selected range controls both nearby Personal History filtering and animated map camera scale.
+- Focused unit command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:SmartParkingReminderTests/Phase1ModelAndLogicTests/test_Phase2HistoryMapSearch_AdjustingRadiusRecomputesNearbyHistory -only-testing:SmartParkingReminderTests/Phase1ModelAndLogicTests/test_Phase1MapSearch_SelectedRangeControlsCameraScale -only-testing:SmartParkingReminderTests/Phase1ModelAndLogicTests/test_Phase1MapSearch_SelectedRangeCameraCentersOnSearchResult -only-testing:SmartParkingReminderTests/Phase1ModelAndLogicTests/test_Phase1MapSearch_SelectedAddressRanksNearbyHistoryByDistance -derivedDataPath /tmp/SmartParkingReminderMapRangeCameraTests`
+- Focused unit result: `** TEST SUCCEEDED **`; 4 tests passed, 0 failed.
+- Full unit command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:SmartParkingReminderTests -derivedDataPath /tmp/SmartParkingReminderMapRangeCameraFullUnitTests`
+- Full unit result: `** TEST SUCCEEDED **`; 52 tests passed, 0 failed.
+- UI smoke command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:SmartParkingReminderUITests/Phase1UITests/test_Phase2HistoryMapSearch_LocalNoteSearchOpensMatchingSpotDetail -derivedDataPath /tmp/SmartParkingReminderMapRangeCameraUITests`
+- UI smoke result: `** TEST SUCCEEDED **`; 1 test passed, 0 failed.
+- Xcode result bundles: `/tmp/SmartParkingReminderMapRangeCameraFullUnitTests/Logs/Test/Test-SmartParkingReminder-2026.05.05_13-29-35--0400.xcresult` and `/tmp/SmartParkingReminderMapRangeCameraUITests/Logs/Test/Test-SmartParkingReminder-2026.05.05_13-31-19--0400.xcresult`.
+
 Latest Phase 2 focused active-session UI check:
 
 - Command: `xcodebuild test -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:SmartParkingReminderUITests/Phase1UITests/test_Phase2ActiveSession_DueSoonStateIsVisible -only-testing:SmartParkingReminderUITests/Phase1UITests/test_Phase2ActiveSession_OverdueStateIsVisibleWithoutAutoEnding -derivedDataPath /tmp/SmartParkingReminderActiveSessionUITests`
@@ -465,6 +713,7 @@ Important current test mapping:
 ## Agent Notes
 
 - Always update this README work log after meaningful project changes so future agents can orient here first.
+- For Phase 2 development, follow `docs/phase2/PHASE2_DEVELOPMENT_THREAD_RESPONSIBILITY.md`; this thread records design/implementation and creates handoff summaries, while Test/QA creates test cases and updates test documents.
 - Do not bring the History list back unless the user explicitly changes the product decision.
 - Search should improve the map workflow, not become a separate results list.
 - Keep Phase 1 simple: no advanced clustering, no ML, no backend.
@@ -472,9 +721,26 @@ Important current test mapping:
 - Be careful with the dirty worktree. There are existing generated/user changes and report folders. Do not revert unrelated files.
 - Prefer `build-for-testing` locally; ask Clawdbot to run full simulator tests.
 - Live Activity now has a first ActivityKit/widget implementation, the required app `NSSupportsLiveActivities` declaration, and simulator lifecycle evidence. Device/simulator visual verification is still needed for final Lock Screen and Dynamic Island presentation evidence.
-- Quick Start now has a first local-only implementation. Keep future polish on the same `ParkingSessionDraft` / store creation path.
-- Personal spot metadata now has a first local-only Map-detail implementation plus local Map filter chips. Keep future polish inside the map workflow and avoid reviving the old History list.
+- Quick Start now has a local-only implementation with default presets plus a recent-duration option. Keep future polish on the same `ParkingSessionDraft` / store creation path.
+- Personal spot metadata now has a first local-only Map-detail implementation plus local Map filter chips and custom spot names. Keep future polish inside the map workflow and avoid reviving the old History list.
+- Map now has a one-shot relocate button and initial user-location camera with Toronto fallback. Keep it one-shot and local-only; do not turn it into continuous/background location tracking.
+- `docs/phase2/PHASE2_PRIVACY_DATA_BOUNDARY.md` is the privacy rulebook for future location-derived assistant behavior. Future smart suggestions, saved/frequent spot models, App Group storage, search history, or public parking caches need a design review before implementation.
+- `docs/phase2/PHASE2_WIDGET_SHARED_STATE_DECISION.md` records that current Live Activities stay ActivityKit-content-state-only; do not add App Group storage unless a future widget feature explicitly needs shared persisted state.
 - Toronto Green P is a future nearby parking discovery track: Phase 2 is research and optional disabled/static marker prototype only; Phase 3 is the earliest production Green P data layer; Phase 4 is real-time availability/payment/deeper integration only with an official API or partnership.
+- Created the Phase 2 Test/QA thread document. This thread now validates only, reports bugs, and generates Debug-thread handoffs without redesigning or fixing features.
+- Updated the Phase 2 Test/QA responsibility: this thread now also reads design/handoff notes and maintains test-only updates in `docs/phase2/PHASE2_SELF_TEST.md`.
+- Ran a managed Phase 2 QA checkpoint from the Test/QA thread and saved the report set under `Self_report/phase2/runs/20260501_152228_phase2_report/`.
+- Automated rerun result: `** TEST SUCCEEDED **` with 40 unit tests and 9 UI tests passing on iPhone 17 Pro Simulator.
+- Final QA readiness: `READY WITH ACCEPTED MANUAL RISK` because visual Lock Screen / Dynamic Island and other manual screenshot evidence was not captured in this pass.
+- QA intake reviewed the new History map filtering service and marker layer model handoffs, then updated `docs/phase2/PHASE2_SELF_TEST.md` with marker-layer validation expectations only.
+- Ran the Phase 2 release QA pass for the latest update and saved the managed report set under `Self_report/phase2/runs/20260505_163802_phase2_release_report/`.
+- Release QA result: `NOT READY`. Unit coverage passed, but UI release validation failed on `Phase1UITests.test_Phase2ActiveSession_OverdueStateIsVisibleWithoutAutoEnding`.
+- Failure summary: a seeded overdue active session did not show `home.activeSessionCard` after relaunch, so overdue active-session restore/presentation must be debugged before release.
+- Updated `docs/phase2/PHASE2_SELF_TEST.md` with the latest test-only expectations for dormant public parking models, privacy/data-boundary decisions, widget shared-state decision, personal spot display names, and map current-location/relocate behavior.
+- Ran the Phase 2 QA release check after the `Search This Area` handoff and saved the managed report set under `Self_report/phase2/runs/20260506_150030_phase2_report/`.
+- Updated `docs/phase2/PHASE2_SELF_TEST.md` with test-only `P2-TC-17 Map Search This Area` coverage, including unit coverage and manual pan/zoom validation expectations.
+- Automated result: 55 unit tests passed, including the three new `Search This Area` unit tests; 8 of 9 UI tests passed.
+- Release QA result remains `NOT READY`: `Phase1UITests.test_Phase2ActiveSession_OverdueStateIsVisibleWithoutAutoEnding` failed in the full run and in focused rerun because `home.activeSessionCard` did not appear after seeded overdue relaunch.
 
 ## Next Good Improvements
 
@@ -494,7 +760,7 @@ Recommended order:
 4. Swift 6 warning cleanup.
 5. Improved active/due-soon/overdue session UI.
 6. Real ActivityKit-backed Live Activity manager and widget extension.
-7. Quick Start on the same session creation path.
+7. Quick Start on the same session creation path. First polish pass with local recent-duration suggestion is done.
 8. Map-only search/filtering improvements.
 9. Personal spot metadata after storage versioning is stable. First pass done.
 10. Toronto Green P / nearby parking discovery research only. Static prototype can be considered in Phase 2 only if official data is reliable; production data layer waits for Phase 3; real-time availability/payment waits for Phase 4 and official API/partnership.

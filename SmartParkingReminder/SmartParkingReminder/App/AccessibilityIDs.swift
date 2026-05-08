@@ -22,8 +22,14 @@ enum A11y {
     static let newSessionLocationField = "newSession.locationField"
     static let newSessionNoteField = "newSession.noteField"
     static let newSessionDurationPicker = "newSession.durationPicker"
+    static let newSessionDurationHoursPicker = "newSession.duration.hours"
+    static let newSessionDurationMinutesPicker = "newSession.duration.minutes"
     static let newSessionStartButton = "newSession.startButton"
     static let newSessionCancelButton = "newSession.cancelButton"
+
+    static func newSessionDurationPresetButton(minutes: Int) -> String {
+        "newSession.duration.preset.\(minutes)"
+    }
 
     // History
     static let historyMap = "history.map"
@@ -33,6 +39,8 @@ enum A11y {
     static let historySearchStatus = "history.searchStatus"
     static let historySearchRadiusPicker = "history.searchRadiusPicker"
     static let historyMetadataFilterPicker = "history.metadataFilterPicker"
+    static let historyRelocateButton = "history.relocateButton"
+    static let historySearchThisAreaButton = "history.searchThisAreaButton"
     static let historyPersonalHistoryToggle = "history.personalHistoryToggle"
     static let historyPersonalSpotButton = "history.personalSpotButton"
     static let historySearchPanel = "historySearchPanel"
@@ -46,6 +54,7 @@ enum A11y {
     static let detailSpotLatLon = "spotDetail.latlon"
     static let detailPersonalMetadata = "spotDetail.personalMetadata"
     static let detailFavoriteButton = "spotDetail.favorite"
+    static let detailSpotDisplayNameField = "spotDetail.displayName"
     static let detailSpotNoteField = "spotDetail.note"
     static let detailTagPrefix = "spotDetail.tag"
     static let detailRatingPrefix = "spotDetail.rating"

@@ -60,13 +60,14 @@ private struct ParkingReminderLockScreenView: View {
                 HStack(alignment: .firstTextBaseline) {
                     Label("Parking", systemImage: "parkingsign.circle.fill")
                         .font(.headline)
+                        .foregroundStyle(statusColor(status))
                     Spacer()
                     Text(status.label)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(statusColor(status))
                 }
 
-                Text(context.attributes.locationName)
+                Text(context.state.locationName)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -105,12 +106,12 @@ private func activityTimeView(
             if includesOverduePrefix {
                 Text("Overdue by")
             }
-            liveOverdueTimerText(from: context.attributes.expectedEndTime)
+            liveOverdueTimerText(from: context.state.scheduledEndDate)
         }
         .lineLimit(1)
         .minimumScaleFactor(0.75)
     } else {
-        liveCountdownTimerText(until: context.attributes.expectedEndTime)
+        liveCountdownTimerText(until: context.state.scheduledEndDate)
             .lineLimit(1)
             .minimumScaleFactor(0.75)
     }
@@ -130,11 +131,7 @@ private func liveStatus(
     context: ActivityViewContext<ParkingReminderActivityAttributes>,
     now: Date
 ) -> ParkingReminderActivityStatus {
-    if context.state.status == .overdue {
-        return .overdue
-    }
-
-    let remaining = context.attributes.expectedEndTime.timeIntervalSince(now)
+    let remaining = context.state.scheduledEndDate.timeIntervalSince(now)
     if remaining <= 0 {
         return .overdue
     }

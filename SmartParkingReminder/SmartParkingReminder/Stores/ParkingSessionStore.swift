@@ -27,11 +27,11 @@ struct ParkingSessionTimerDisplay: Equatable {
 struct ParkingActivitySnapshot: Equatable {
     let sessionID: UUID
     let locationName: String
-    let expectedEndTime: Date
-    let status: ParkingSessionStatus
-    let displayTime: TimeInterval
-    let timeText: String
-    let updatedAt: Date
+    let startDate: Date
+    let scheduledEndDate: Date
+    let lastUpdatedDate: Date
+
+    var expectedEndTime: Date { scheduledEndDate }
 }
 
 protocol ParkingActivityLifecycleManaging {
@@ -39,6 +39,7 @@ protocol ParkingActivityLifecycleManaging {
     func activeSessionRestored(_ snapshot: ParkingActivitySnapshot)
     func activeSessionUpdated(_ snapshot: ParkingActivitySnapshot)
     func sessionEnded(sessionID: UUID)
+    func noActiveSessionRestored()
 }
 
 struct NoopParkingActivityLifecycleManager: ParkingActivityLifecycleManaging {
@@ -46,6 +47,7 @@ struct NoopParkingActivityLifecycleManager: ParkingActivityLifecycleManaging {
     func activeSessionRestored(_ snapshot: ParkingActivitySnapshot) {}
     func activeSessionUpdated(_ snapshot: ParkingActivitySnapshot) {}
     func sessionEnded(sessionID: UUID) {}
+    func noActiveSessionRestored() {}
 }
 
 @MainActor
@@ -82,6 +84,8 @@ final class ParkingSessionStore: ObservableObject {
             hasLoadedFromDisk = true
             if let activeSession {
                 activityLifecycle.activeSessionRestored(activitySnapshot(for: activeSession))
+            } else {
+                activityLifecycle.noActiveSessionRestored()
             }
         }
         startClock()
@@ -91,9 +95,19 @@ final class ParkingSessionStore: ObservableObject {
         sessions.first(where: { $0.persistedStatus == .active })
     }
 
-    var suggestedQuickStartLocationName: String {
-        sessions.first(where: { !$0.locationName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })?.locationName
-        ?? "Current Location"
+    var quickStartLocationName: String {
+        ParkingSessionDraft.quickStartLocationName
+    }
+
+    var quickStartDurationOptions: [Int] {
+        let defaultOptions = [30, 60, 120]
+        guard let recent = mostRecentCompletedSessionDurationMinutes() else {
+            return defaultOptions
+        }
+        guard !defaultOptions.contains(recent) else {
+            return defaultOptions
+        }
+        return defaultOptions + [recent]
     }
 
     var isActiveSessionExpired: Bool {
@@ -163,6 +177,8 @@ final class ParkingSessionStore: ObservableObject {
     }
 
     func startNewSession(from draft: ParkingSessionDraft) async {
+        guard draft.duration > 0 else { return }
+
         // Phase 1 assumption: only one active session at a time.
         if let active = activeSession {
             await endSession(id: active.id)
@@ -194,6 +210,25 @@ final class ParkingSessionStore: ObservableObject {
         await endSession(id: active.id)
     }
 
+    func addTimeToActiveSession(minutes: Int) async {
+        guard minutes > 0, let active = activeSession else { return }
+        await addTime(to: active.id, minutes: minutes)
+    }
+
+    func addTime(to sessionID: UUID, minutes: Int) async {
+        guard minutes > 0,
+              let idx = sessions.firstIndex(where: { $0.id == sessionID && $0.persistedStatus == .active })
+        else { return }
+
+        sessions[idx].expectedEndTime = sessions[idx].expectedEndTime.addingTimeInterval(TimeInterval(minutes * 60))
+        let updated = sessions[idx]
+
+        persist()
+        await notifications.cancelNotifications(for: sessionID)
+        await notifications.scheduleNotifications(for: updated)
+        activityLifecycle.activeSessionUpdated(activitySnapshot(for: updated))
+    }
+
     func endSession(id: UUID) async {
         guard let idx = sessions.firstIndex(where: { $0.id == id }) else { return }
         var s = sessions[idx]
@@ -211,15 +246,12 @@ final class ParkingSessionStore: ObservableObject {
     }
 
     func activitySnapshot(for session: ParkingSession) -> ParkingActivitySnapshot {
-        let display = timerDisplay(for: session)
-        return ParkingActivitySnapshot(
+        ParkingActivitySnapshot(
             sessionID: session.id,
             locationName: session.locationName,
-            expectedEndTime: session.expectedEndTime,
-            status: display.status,
-            displayTime: display.displayTime,
-            timeText: display.timeText,
-            updatedAt: now
+            startDate: session.startTime,
+            scheduledEndDate: session.expectedEndTime,
+            lastUpdatedDate: nowProvider()
         )
     }
 
@@ -241,15 +273,28 @@ final class ParkingSessionStore: ObservableObject {
         }
     }
 
+    private func mostRecentCompletedSessionDurationMinutes() -> Int? {
+        let completed = sessions
+            .filter { $0.persistedStatus == .completed }
+            .sorted {
+                ($0.actualEndTime ?? $0.startTime) > ($1.actualEndTime ?? $1.startTime)
+            }
+
+        guard let recent = completed.first else { return nil }
+
+        let rawMinutes = recent.expectedEndTime.timeIntervalSince(recent.startTime) / 60
+        guard rawMinutes.isFinite, rawMinutes > 0 else { return nil }
+
+        let roundedToFive = Int((rawMinutes / 5).rounded() * 5)
+        return min(max(roundedToFive, 15), 240)
+    }
+
     private func startClock() {
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
                 self.now = self.nowProvider()
-                if let activeSession = self.activeSession {
-                    self.activityLifecycle.activeSessionUpdated(self.activitySnapshot(for: activeSession))
-                }
             }
         }
     }

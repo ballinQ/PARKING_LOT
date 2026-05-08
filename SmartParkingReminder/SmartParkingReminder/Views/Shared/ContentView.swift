@@ -14,7 +14,7 @@ struct ContentView: View {
                 .tabItem { Label("Home", systemImage: "house") }
                 .accessibilityIdentifier(A11y.tabHome)
 
-            HistoryView()
+            HistoryView(locationService: locationService)
                 .tabItem { Label("Map", systemImage: "map") }
                 .accessibilityIdentifier(A11y.tabHistory)
         }

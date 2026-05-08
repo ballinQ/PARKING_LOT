@@ -39,7 +39,8 @@ struct HomeView: View {
                     .accessibilityIdentifier(A11y.homeNoActiveSessionView)
 
                     QuickStartParkingView(
-                        locationName: store.suggestedQuickStartLocationName,
+                        locationName: store.quickStartLocationName,
+                        durationOptions: store.quickStartDurationOptions,
                         inFlightMinutes: quickStartMinutesInFlight,
                         start: { minutes in
                             Task { await quickStart(minutes: minutes) }
@@ -75,7 +76,6 @@ struct HomeView: View {
         let coordTuple = coordinate.map { (lat: $0.latitude, lon: $0.longitude) }
 
         await store.startNewSession(from: .quickStart(
-            locationName: store.suggestedQuickStartLocationName,
             durationMinutes: minutes,
             coordinate: coordTuple
         ))
@@ -84,10 +84,9 @@ struct HomeView: View {
 
 private struct QuickStartParkingView: View {
     let locationName: String
+    let durationOptions: [Int]
     let inFlightMinutes: Int?
     let start: (Int) -> Void
-
-    private let durations = [30, 60, 120]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -102,24 +101,54 @@ private struct QuickStartParkingView: View {
                     .lineLimit(1)
             }
 
-            HStack(spacing: 10) {
-                ForEach(durations, id: \.self) { minutes in
-                    Button {
-                        start(minutes)
-                    } label: {
-                        Label(durationLabel(for: minutes), systemImage: "play.fill")
-                            .frame(maxWidth: .infinity)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(durationOptions, id: \.self) { minutes in
+                        quickStartButton(minutes: minutes)
                     }
-                    .buttonStyle(.bordered)
-                    .disabled(inFlightMinutes != nil)
-                    .accessibilityIdentifier(A11y.homeQuickStartButton(minutes: minutes))
                 }
+                .padding(.vertical, 2)
             }
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func quickStartButton(minutes: Int) -> some View {
+        Button {
+            start(minutes)
+        } label: {
+            HStack(spacing: 6) {
+                if inFlightMinutes == minutes {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "play.fill")
+                        .font(.caption.weight(.semibold))
+                }
+
+                Text(durationLabel(for: minutes))
+                    .fontWeight(.semibold)
+            }
+            .frame(minWidth: 82)
+        }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .disabled(inFlightMinutes != nil)
+        .accessibilityIdentifier(A11y.homeQuickStartButton(minutes: minutes))
     }
 
     private func durationLabel(for minutes: Int) -> String {
-        if minutes < 60 { return "\(minutes)m" }
-        return "\(minutes / 60)h"
+        switch minutes {
+        case ..<60:
+            return "\(minutes)m"
+        default:
+            let hours = minutes / 60
+            let remainingMinutes = minutes % 60
+            if remainingMinutes == 0 { return "\(hours)h" }
+            return "\(hours)h \(remainingMinutes)m"
+        }
     }
 }
