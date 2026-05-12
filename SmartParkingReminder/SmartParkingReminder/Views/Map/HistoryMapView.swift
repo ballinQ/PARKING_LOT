@@ -163,6 +163,10 @@ struct HistoryMapView: View {
         .frame(height: height, alignment: .top)
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(alignment: .top) {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color(.separator).opacity(0.25), lineWidth: 0.5)
+        }
         .shadow(color: .black.opacity(0.22), radius: 18, y: -4)
         .padding(.horizontal, 8)
         .padding(.bottom, keyboardLift + 6)
@@ -456,6 +460,10 @@ struct HistoryMapView: View {
                     .padding(.horizontal, 10)
                     .background(.thinMaterial)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color(.separator).opacity(0.25), lineWidth: 0.5)
+                    }
                 }
                 .buttonStyle(.plain)
                 .highPriorityGesture(
@@ -505,6 +513,10 @@ struct HistoryMapView: View {
             .padding(.horizontal, 10)
             .background(.thinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color(.separator).opacity(0.25), lineWidth: 0.5)
+            }
         }
         .buttonStyle(.plain)
         .highPriorityGesture(
@@ -574,6 +586,10 @@ struct HistoryMapView: View {
         .padding(.vertical, 10)
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color(.separator).opacity(0.25), lineWidth: 0.5)
+        }
     }
 
     @ViewBuilder

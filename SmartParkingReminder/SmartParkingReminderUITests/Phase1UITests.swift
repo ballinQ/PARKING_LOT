@@ -43,8 +43,7 @@ final class Phase1UITests: XCTestCase {
         let noActive = app.otherElements.matching(identifier: "home.noActiveSession").firstMatch
         XCTAssertTrue(noActive.waitForExistence(timeout: 5))
 
-        // Go to Map tab
-        app.tabBars.buttons["Map"].tap()
+        goToMap()
 
         let map = app.otherElements.matching(identifier: "history.map").firstMatch
         XCTAssertTrue(map.waitForExistence(timeout: 5))
@@ -65,7 +64,7 @@ final class Phase1UITests: XCTestCase {
         startSession(location: "GPS Spot", note: "")
         app.buttons.matching(identifier: "home.endParking").firstMatch.tap()
 
-        app.tabBars.buttons["Map"].tap()
+        goToMap()
 
         // Use the visible personal history side panel to open detail sheet.
         openFirstSpotFromPersonalHistory()
@@ -85,7 +84,7 @@ final class Phase1UITests: XCTestCase {
         startSession(location: "Back Test Spot", note: "")
         app.buttons.matching(identifier: "home.endParking").firstMatch.tap()
 
-        app.tabBars.buttons["Map"].tap()
+        goToMap()
 
         let map = app.otherElements.matching(identifier: "history.map").firstMatch
         XCTAssertTrue(map.waitForExistence(timeout: 5))
@@ -175,7 +174,7 @@ final class Phase1UITests: XCTestCase {
         let noActive = app.otherElements.matching(identifier: "home.noActiveSession").firstMatch
         XCTAssertTrue(noActive.waitForExistence(timeout: 5))
 
-        app.tabBars.buttons["Map"].tap()
+        goToMap()
 
         let map = app.otherElements.matching(identifier: "history.map").firstMatch
         XCTAssertTrue(map.waitForExistence(timeout: 5))
@@ -199,7 +198,37 @@ final class Phase1UITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["blue pillar"].exists)
     }
 
+    func test_Phase2ModeSwitch_TogglesBetweenHomeAndMapWithoutTabBar() {
+        XCTAssertFalse(app.tabBars.firstMatch.exists)
+
+        let mapSwitch = app.buttons.matching(identifier: "modeSwitch.mapButton").firstMatch
+        XCTAssertTrue(mapSwitch.waitForExistence(timeout: 5))
+        mapSwitch.tap()
+
+        let searchField = app.textFields.matching(identifier: "history.searchField").firstMatch
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+
+        let homeSwitch = app.buttons.matching(identifier: "modeSwitch.homeButton").firstMatch
+        XCTAssertTrue(homeSwitch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.tabBars.firstMatch.exists)
+
+        homeSwitch.tap()
+
+        let startParkingButton = app.buttons.matching(identifier: "home.startParking").firstMatch
+        XCTAssertTrue(startParkingButton.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons.matching(identifier: "modeSwitch.mapButton").firstMatch.waitForExistence(timeout: 5))
+    }
+
     // MARK: - Helpers
+
+    private func goToMap() {
+        let mapSwitch = app.buttons.matching(identifier: "modeSwitch.mapButton").firstMatch
+        XCTAssertTrue(mapSwitch.waitForExistence(timeout: 5))
+        mapSwitch.tap()
+
+        let map = app.otherElements.matching(identifier: "history.map").firstMatch
+        XCTAssertTrue(map.waitForExistence(timeout: 5))
+    }
 
     private func startSession(location: String, note: String) {
         app.buttons.matching(identifier: "home.startParking").firstMatch.tap()

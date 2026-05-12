@@ -40,6 +40,8 @@ enum A11y {
     static let historySearchRadiusPicker = "history.searchRadiusPicker"
     static let historyMetadataFilterPicker = "history.metadataFilterPicker"
     static let historyRelocateButton = "history.relocateButton"
+    static let modeSwitchMapButton = "modeSwitch.mapButton"
+    static let modeSwitchHomeButton = "modeSwitch.homeButton"
     static let historySearchThisAreaButton = "history.searchThisAreaButton"
     static let historyPersonalHistoryToggle = "history.personalHistoryToggle"
     static let historyPersonalSpotButton = "history.personalSpotButton"

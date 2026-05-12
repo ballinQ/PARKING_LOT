@@ -15,9 +15,8 @@ struct ParkingSpotDetailSheetView: View {
             Button {
                 onBack()
             } label: {
-                Text("< Personal History")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
+                Label("Personal History", systemImage: "chevron.left")
+                    .font(.subheadline.weight(.semibold))
             }
             .buttonStyle(.plain)
             .foregroundStyle(.blue)
@@ -47,9 +46,9 @@ struct ParkingSpotDetailSheetView: View {
                 onMetadataChange: onMetadataChange
             )
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Recent sessions")
-                    .font(.footnote)
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Recent Sessions")
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(.secondary)
 
                 ForEach(group.sessions.prefix(5)) { s in
@@ -88,13 +87,16 @@ struct ParkingSpotDetailSheetView: View {
                                 .foregroundStyle(.secondary)
                                 .lineLimit(3)
                         }
-
-                        Divider()
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
             }
 
-            HStack {
+            HStack(spacing: 10) {
                 Button {
                     onOpenAppleMaps()
                 } label: {
@@ -276,8 +278,8 @@ private struct StatusSummaryView: View {
             SummaryPill(title: "On Time", value: summary.onTime, color: .green)
             SummaryPill(title: "Active", value: summary.active, color: .blue)
             SummaryPill(title: "Overdue", value: summary.overdue, color: .red)
-            Spacer()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -297,6 +299,7 @@ private struct SummaryPill: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(color.opacity(0.10))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }

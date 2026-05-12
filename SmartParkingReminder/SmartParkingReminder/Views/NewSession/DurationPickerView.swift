@@ -16,8 +16,10 @@ struct DurationPickerView: View {
                         Text(label(for: preset))
                             .font(.caption.weight(.semibold))
                             .frame(maxWidth: .infinity)
+                            .padding(.vertical, 2)
                     }
                     .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
                     .accessibilityIdentifier(A11y.newSessionDurationPresetButton(minutes: preset))
                 }
             }
@@ -44,6 +46,8 @@ struct DurationPickerView: View {
                 .accessibilityIdentifier(A11y.newSessionDurationMinutesPicker)
             }
             .frame(height: 132)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
             Text("Selected: \(label(for: minutes))")
                 .font(.footnote)

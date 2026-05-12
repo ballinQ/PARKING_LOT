@@ -19,31 +19,41 @@ struct NewSessionView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Location") {
+                Section {
                     TextField("e.g. Green P Lot", text: $locationName)
                         .textInputAutocapitalization(.words)
                         .accessibilityIdentifier(A11y.newSessionLocationField)
+                } header: {
+                    Label("Location", systemImage: "mappin.and.ellipse")
                 }
 
-                Section("Duration") {
+                Section {
                     DurationPickerView(minutes: $durationMinutes)
                     Text("Notifications: 15 minutes before expiry and at expiry.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                } header: {
+                    Label("Duration", systemImage: "timer")
                 }
 
-                Section("Note (optional)") {
+                Section {
                     TextField("Add a note", text: $note, axis: .vertical)
                         .lineLimit(3...6)
                         .accessibilityIdentifier(A11y.newSessionNoteField)
+                } header: {
+                    Label("Note (optional)", systemImage: "note.text")
                 }
 
-                Section("Location (auto)") {
+                Section {
                     Text("When you tap Start, the app requests your current location once and saves it with the session.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                } header: {
+                    Label("Location (auto)", systemImage: "location")
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Color(.systemGroupedBackground))
             .navigationTitle("New Session")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

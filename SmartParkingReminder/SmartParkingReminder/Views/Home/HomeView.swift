@@ -10,61 +10,96 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 16) {
-                if let active = store.activeSession {
-                    ActiveSessionCardView(
-                        session: active,
-                        timerDisplay: store.timerDisplay(for: active)
-                    )
+            ZStack {
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
 
-                    // Map preview of the active parking location (if available).
-                    ActiveSessionMapView(session: active)
-                        .frame(height: 220)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        if let active = store.activeSession {
+                            Text("Current Session")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                                .tracking(0.5)
 
-                    Button(role: .destructive) {
-                        Task { await store.endActiveSession() }
-                    } label: {
-                        Text("End Parking")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .accessibilityIdentifier(A11y.homeEndParkingButton)
-                    .buttonStyle(.borderedProminent)
-                } else {
-                    ContentUnavailableView(
-                        "No Active Session",
-                        systemImage: "parkingsign",
-                        description: Text("Start a parking session to see the countdown and reminders.")
-                    )
-                    .accessibilityElement(children: .contain)
-                    .accessibilityIdentifier(A11y.homeNoActiveSessionView)
+                            ActiveSessionCardView(
+                                session: active,
+                                timerDisplay: store.timerDisplay(for: active)
+                            )
 
-                    QuickStartParkingView(
-                        locationName: store.quickStartLocationName,
-                        durationOptions: store.quickStartDurationOptions,
-                        inFlightMinutes: quickStartMinutesInFlight,
-                        start: { minutes in
-                            Task { await quickStart(minutes: minutes) }
+                            VStack(alignment: .leading, spacing: 10) {
+                                Label("Parked Location", systemImage: "map")
+                                    .font(.subheadline.weight(.semibold))
+
+                                ActiveSessionMapView(session: active)
+                                    .frame(height: 220)
+                                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                            .stroke(Color(.separator).opacity(0.35), lineWidth: 0.5)
+                                    }
+                            }
+
+                            Button(role: .destructive) {
+                                Task { await store.endActiveSession() }
+                            } label: {
+                                Label("End Parking", systemImage: "stop.circle.fill")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .accessibilityIdentifier(A11y.homeEndParkingButton)
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+                        } else {
+                            NoActiveSessionPanel()
+
+                            QuickStartParkingView(
+                                locationName: store.quickStartLocationName,
+                                durationOptions: store.quickStartDurationOptions,
+                                inFlightMinutes: quickStartMinutesInFlight,
+                                start: { minutes in
+                                    Task { await quickStart(minutes: minutes) }
+                                }
+                            )
+
+                            startParkingButton
                         }
-                    )
-                }
-
-                Spacer()
-
-                Button {
-                    showingNewSession = true
-                } label: {
-                    Text("Start Parking")
-                        .frame(maxWidth: .infinity)
-                }
-                .accessibilityIdentifier(A11y.homeStartParkingButton)
-                .buttonStyle(.borderedProminent)
-                .sheet(isPresented: $showingNewSession) {
-                    NewSessionView(locationService: locationService)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 24)
                 }
             }
-            .padding()
             .navigationTitle("Smart Parking")
+            .toolbar {
+                if store.activeSession != nil {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            showingNewSession = true
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                        }
+                        .accessibilityLabel("Start Parking")
+                        .accessibilityIdentifier(A11y.homeStartParkingButton)
+                    }
+                }
+            }
+            .sheet(isPresented: $showingNewSession) {
+                NewSessionView(locationService: locationService)
+            }
         }
+    }
+
+    private var startParkingButton: some View {
+        Button {
+            showingNewSession = true
+        } label: {
+            Label("Start Parking", systemImage: "plus.circle.fill")
+                .frame(maxWidth: .infinity)
+        }
+        .accessibilityIdentifier(A11y.homeStartParkingButton)
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
     }
 
     private func quickStart(minutes: Int) async {
@@ -82,6 +117,36 @@ struct HomeView: View {
     }
 }
 
+private struct NoActiveSessionPanel: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Image(systemName: "parkingsign.circle.fill")
+                .font(.system(size: 44))
+                .foregroundStyle(.blue)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("No Active Session")
+                    .font(.title3.weight(.semibold))
+
+                Text("Start parking to save your spot, track time, and get local reminders.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color(.separator).opacity(0.35), lineWidth: 0.5)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(A11y.homeNoActiveSessionView)
+    }
+}
+
 private struct QuickStartParkingView: View {
     let locationName: String
     let durationOptions: [Int]
@@ -90,11 +155,11 @@ private struct QuickStartParkingView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            VStack(alignment: .leading, spacing: 4) {
                 Label("Quick Start", systemImage: "timer")
-                    .font(.headline)
+                    .font(.headline.weight(.semibold))
                     .accessibilityIdentifier(A11y.homeQuickStartPanel)
-                Spacer()
+
                 Text(locationName)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -110,10 +175,14 @@ private struct QuickStartParkingView: View {
                 .padding(.vertical, 2)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
         .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color(.separator).opacity(0.35), lineWidth: 0.5)
+        }
     }
 
     private func quickStartButton(minutes: Int) -> some View {
@@ -136,6 +205,7 @@ private struct QuickStartParkingView: View {
         }
         .buttonStyle(.bordered)
         .buttonBorderShape(.capsule)
+        .controlSize(.regular)
         .disabled(inFlightMinutes != nil)
         .accessibilityIdentifier(A11y.homeQuickStartButton(minutes: minutes))
     }

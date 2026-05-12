@@ -399,6 +399,18 @@ Manual verification still needed:
 - Build-for-testing verification passed after the release-candidate polish pass: `xcodebuild build-for-testing ... -derivedDataPath /tmp/SmartParkingReminderPhase2RCPolishBuild`.
 - Focused release-candidate UI sanity verification passed: Quick Start, Map detail content/actions, and History detail Back flow, 3 UI tests, 0 failures.
 
+2026-05-12:
+
+- Updated the project-local `phase2-develop` skill for the end-of-Phase-2 execution mode.
+- Development thread now explicitly owns UI design, function/business-logic design, implementation, focused self-testing, development-owned debugging, simulator/build/log checks, verification before completion, README updates, and Test/QA handoffs for its own work.
+- The skill now maps requested workflows to available/equivalent capabilities:
+  - SwiftUI UI work: `build-ios-apps:swiftui-ui-patterns`
+  - business logic: test-driven development loop
+  - simulator/log checks: `build-ios-apps:ios-debugger-agent` or approved `xcodebuild`/`simctl`
+  - failures: systematic debugging / `phase2-debug` when blocking
+  - completion: verification-before-completion discipline
+- Updated `docs/phase2/PHASE2_DEVELOPMENT_THREAD_RESPONSIBILITY.md` with the same responsibility shift.
+
 ## Testing
 
 Preferred Clawdbot full self-test command is documented in `docs/phase1/PHASE1_SELF_TEST.md`.
@@ -692,6 +704,43 @@ Latest Phase 2 local Map search UI hardening:
 - Added UI coverage for searching a saved note, opening the matching spot detail, and confirming the saved note appears.
 - Verified `Phase1UITests.test_Phase2HistoryMapSearch_LocalNoteSearchOpensMatchingSpotDetail`: `** TEST SUCCEEDED **`.
 - Re-verified `Phase1UITests.test_Phase1HistoryDetail_BackReturnsToHistoryPanel`: `** TEST SUCCEEDED **`.
+
+2026-05-12 bounded UI redesign pass:
+
+- Performed a UI-only polish pass before moving to the next phase; no store, model, notification, timer, persistence, or data-flow logic was intentionally changed.
+- Home now uses a grouped background, stronger empty state panel, clearer active-session hierarchy, framed active-location map preview, and large action controls.
+- Active sessions keep the same status/timer values but present the timer and progress in a clearer status block with a compact coordinate chip.
+- New Session keeps the same form fields and start logic, but section headers, duration presets, and the picker surface are visually clearer.
+- Map bottom sheet and map/detail rows received subtle stroke/spacing polish without changing map-first behavior or bringing back the old History list.
+- Simulator build/run succeeded through XcodeBuildMCP on iPhone 17 Simulator with no reported build warnings/errors.
+- Build verification passed: `xcodebuild build-for-testing -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/SmartParkingReminderBoundedUIPassBuild`.
+- Test handoff: `docs/phase2/handoffs/20260512_1105_bounded_ui_redesign_TEST_HANDOFF.md`.
+
+2026-05-12 Map tab bar UI enhancement:
+
+- Superseded later the same day by the floating mode switch refinement below.
+- Changed the app shell to use explicit Home/Map tab selection so the Map screen can return Home from inside its own immersive map workflow.
+- Hid the standard system tab bar only on the Map screen so it no longer blocks or visually competes with the collapsed Map search sheet.
+- Added a compact floating `Home` control on the Map surface. This earlier control was removed by the floating mode switch refinement.
+- Home keeps the standard Home/Map tab bar visible; Map keeps the current bottom sheet/search/history/detail behavior unchanged.
+- No map search logic, parking-session logic, storage, timer, notification, backend, cloud, analytics, ML, or old History list behavior was intentionally changed.
+- Added focused UI coverage: `Phase1UITests.test_Phase2Map_HidesTabBarAndReturnsHomeWithFloatingButton`.
+- Focused UI result: `** TEST SUCCEEDED **`; 1 UI test passed, 0 failed.
+- Build verification passed: `xcodebuild build-for-testing -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/SmartParkingReminderMapTabBarBuild`.
+- Test handoff: `docs/phase2/handoffs/20260512_1355_map_tab_bar_ui_enhancement_TEST_HANDOFF.md`.
+
+2026-05-12 floating mode switch refinement:
+
+- Replaced the standard `TabView` shell with a two-mode `ZStack` shell because the app only has Home and Map modes.
+- Removed the previous Map-only top `Home` pill and replaced it with one shared circular glass-style mode switch near the lower-left.
+- Home mode shows an icon-only Map switch with accessibility ID `modeSwitch.mapButton`.
+- Map mode shows an icon-only Home switch with accessibility ID `modeSwitch.homeButton`.
+- The switch uses native iOS material styling, a circular shape, a subtle stroke, and shadow; no iOS 26-only Liquid Glass API dependency was added.
+- Updated map UI tests to navigate through the new mode switch instead of the removed tab bar.
+- No map search logic, parking-session logic, storage, timer, notification, backend, cloud, analytics, ML, or old History list behavior was intentionally changed.
+- Build verification passed: `xcodebuild build-for-testing -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/SmartParkingReminderFloatingModeSwitchBuild`.
+- Focused UI result: `** TEST SUCCEEDED **`; `test_Phase2ModeSwitch_TogglesBetweenHomeAndMapWithoutTabBar` and `test_TC11_TC12_MapDetailSheet_ShowsSpotInfoAndActions` passed, 0 failed.
+- Test handoff: `docs/phase2/handoffs/20260512_1408_floating_mode_switch_TEST_HANDOFF.md`.
 
 ## Phase 1 Self-Test Deliverables
 
