@@ -742,6 +742,45 @@ Latest Phase 2 local Map search UI hardening:
 - Focused UI result: `** TEST SUCCEEDED **`; `test_Phase2ModeSwitch_TogglesBetweenHomeAndMapWithoutTabBar` and `test_TC11_TC12_MapDetailSheet_ShowsSpotInfoAndActions` passed, 0 failed.
 - Test handoff: `docs/phase2/handoffs/20260512_1408_floating_mode_switch_TEST_HANDOFF.md`.
 
+2026-05-13 Phase 2 Test/QA self-test for new project design:
+
+- Read the latest Phase 2 design/test handoffs for bounded UI redesign, floating mode switch, and release-candidate polish.
+- Updated `docs/phase2/PHASE2_SELF_TEST.md` test-only coverage so the new bounded UI/floating mode switch design is tracked as `P2-TC-18`.
+- Ran the managed Phase 2 self-test on iPhone 17 Pro / iOS 26.2 Simulator and saved artifacts under `Self_report/phase2/runs/20260513_090124_phase2_report`.
+- Automated result: **NOT READY**. Unit tests passed: 55 executed, 0 failed. UI tests: 10 executed, 1 failed.
+- New design result: `test_Phase2ModeSwitch_TogglesBetweenHomeAndMapWithoutTabBar` passed, confirming the floating Home/Map mode switch works in automation.
+- Release blocker: `test_Phase2ActiveSession_OverdueStateIsVisibleWithoutAutoEnding` failed because `home.activeSessionCard` did not appear after relaunch with a seeded overdue active session; the focused rerun failed at the same assertion.
+- Report artifacts created: `PHASE2_TEST_REPORT.md`, `PHASE2_TEST_REPORT_DATA.json`, `PHASE2_TEST_REPORT.xlsx`, full `xcodebuild` log, focused rerun log, and `.xcresult` bundles in the run folder.
+
+2026-05-13 Home to Map transition animation:
+
+- Added a matched-geometry transition from the lower-left Home Map switch into the collapsed Map search bar so the Map surface feels like it emerges from the tapped control.
+- The transition uses a short `0.38s` smooth animation and keeps the Map in its normal collapsed state after arrival: map visible, search visible, no keyboard focus, and no expanded history/detail panel.
+- Passed the shared SwiftUI namespace from `ContentView` through `HistoryView` into `HistoryMapView`; no parking-session, map-search, storage, timer, notification, backend, cloud, analytics, ML, or old History list behavior was intentionally changed.
+- Updated focused UI coverage in `Phase1UITests.test_Phase2ModeSwitch_TogglesBetweenHomeAndMapWithoutTabBar` to verify Map opens with the search field visible while the expanded history panel and keyboard stay closed.
+- Build verification passed: `xcodebuild build-for-testing -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/SmartParkingReminderHomeMapTransitionBuild`.
+- Focused UI result: `** TEST SUCCEEDED **`; 1 UI test passed, 0 failed.
+- Test handoff: `docs/phase2/handoffs/20260513_1034_home_map_transition_TEST_HANDOFF.md`.
+
+2026-05-13 floating switch reference polish:
+
+- Matched the latest visual reference more closely by moving the shared Home/Map mode switch to the lower-right corner on both Home and Map.
+- Updated the collapsed Map surface so it reads as a compact floating search capsule plus a separate circular Home switch, instead of a broad material bottom card.
+- Kept medium and expanded Map sheet behavior unchanged: dragging/tapping search still reveals Personal History/search content inside the Map workflow.
+- No parking-session, timer, notification, storage, search, map filtering, backend, cloud, analytics, ML, or old History list behavior was intentionally changed.
+- Build verification passed: `xcodebuild build-for-testing -project SmartParkingReminder/SmartParkingReminder.xcodeproj -scheme SmartParkingReminder -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/SmartParkingReminderFloatingModeReferenceBuild`.
+- Focused UI result: `** TEST SUCCEEDED **`; `Phase1UITests.test_Phase2ModeSwitch_TogglesBetweenHomeAndMapWithoutTabBar` passed, 0 failed.
+- Runtime app launch passed through XcodeBuildMCP on iPhone 17 Simulator; Home screenshot captured at `/var/folders/1t/jt00hh9n531g8csbnk5vmfm00000gn/T/screenshot_optimized_5e481e41-c326-4899-ac62-5e44b8ea0f65.jpg`.
+- Test handoff: `docs/phase2/handoffs/20260513_1318_floating_mode_reference_polish_TEST_HANDOFF.md`.
+
+2026-05-13 Phase 2.5 document set:
+
+- Created `docs/phase2_5/` as the authoritative planning folder for the next bridge release: Toronto static Green P / public parking discovery.
+- Added Phase 2.5 roadmap, architecture review, source review checklist, self-test runbook, release-candidate checklist, and handoff folder.
+- Copied the relevant Green P planning decisions forward from the Phase 2 research note while leaving the original Phase 2 note as historical research.
+- Locked Phase 2.5 scope to verified static data only: no backend, Supabase, login, cloud sync, analytics, ML, payment, real-time availability, community map, continuous background location, or old History list.
+- Updated `docs/README.md` and `docs/phase2/README.md` so future agents can find the Phase 2.5 materials without rereading the whole repo.
+
 ## Phase 1 Self-Test Deliverables
 
 Clawdbot should save each run under a timestamped folder and include:

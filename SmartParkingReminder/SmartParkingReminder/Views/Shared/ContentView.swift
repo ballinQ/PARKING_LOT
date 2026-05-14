@@ -4,13 +4,14 @@ struct ContentView: View {
     @EnvironmentObject var store: ParkingSessionStore
     @StateObject private var locationService: LocationService
     @State private var selectedMode: AppMode = .home
+    @Namespace private var modeTransitionNamespace
 
     init(locationService: LocationService = LocationService()) {
         _locationService = StateObject(wrappedValue: locationService)
     }
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
+        ZStack(alignment: .bottomTrailing) {
             switch selectedMode {
             case .home:
                 HomeView(locationService: locationService)
@@ -18,17 +19,23 @@ struct ContentView: View {
                     .transition(.opacity)
 
             case .map:
-                HistoryView(locationService: locationService)
+                HistoryView(
+                    locationService: locationService,
+                    modeTransitionNamespace: modeTransitionNamespace
+                )
                     .accessibilityIdentifier(A11y.tabHistory)
                     .transition(.opacity)
             }
 
-            FloatingModeSwitchButton(mode: selectedMode) {
-                withAnimation(.snappy) {
+            FloatingModeSwitchButton(
+                mode: selectedMode,
+                modeTransitionNamespace: modeTransitionNamespace
+            ) {
+                withAnimation(.smooth(duration: 0.38)) {
                     selectedMode = selectedMode.toggled()
                 }
             }
-            .padding(.leading, 16)
+            .padding(.trailing, 18)
             .padding(.bottom, selectedMode.switchBottomPadding)
         }
         .onAppear {
@@ -73,6 +80,10 @@ struct ContentView: View {
     }
 }
 
+private enum ModeTransitionID {
+    static let mapSearchMorph = "modeSwitch.mapSearchMorph"
+}
+
 private enum AppMode {
     case home
     case map
@@ -107,9 +118,9 @@ private enum AppMode {
     var switchBottomPadding: CGFloat {
         switch self {
         case .home:
-            return 92
+            return 36
         case .map:
-            return 138
+            return 36
         }
     }
 
@@ -125,24 +136,48 @@ private enum AppMode {
 
 private struct FloatingModeSwitchButton: View {
     let mode: AppMode
+    let modeTransitionNamespace: Namespace.ID
     let toggle: () -> Void
 
     var body: some View {
         Button(action: toggle) {
-            Image(systemName: mode.switchSystemImage)
-                .font(.title3.weight(.semibold))
-                .frame(width: 52, height: 52)
+            ZStack {
+                switchBackground
+
+                Image(systemName: mode.switchSystemImage)
+                    .font(.title3.weight(.semibold))
+            }
+            .frame(width: 52, height: 52)
         }
         .buttonStyle(.plain)
         .foregroundStyle(.primary)
-        .background(.ultraThinMaterial)
-        .clipShape(Circle())
-        .overlay {
-            Circle()
-                .stroke(Color(.separator).opacity(0.32), lineWidth: 0.5)
-        }
         .shadow(color: .black.opacity(0.20), radius: 14, y: 6)
         .accessibilityLabel(mode.switchAccessibilityLabel)
         .accessibilityIdentifier(mode.switchAccessibilityIdentifier)
+    }
+
+    @ViewBuilder
+    private var switchBackground: some View {
+        if mode == .home {
+            Circle()
+                .fill(.ultraThinMaterial)
+                .matchedGeometryEffect(
+                    id: ModeTransitionID.mapSearchMorph,
+                    in: modeTransitionNamespace,
+                    properties: .frame,
+                    isSource: true
+                )
+                .overlay {
+                    Circle()
+                        .stroke(Color(.separator).opacity(0.32), lineWidth: 0.5)
+                }
+        } else {
+            Circle()
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    Circle()
+                        .stroke(Color(.separator).opacity(0.32), lineWidth: 0.5)
+                }
+        }
     }
 }

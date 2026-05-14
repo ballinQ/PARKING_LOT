@@ -208,6 +208,10 @@ final class Phase1UITests: XCTestCase {
         let searchField = app.textFields.matching(identifier: "history.searchField").firstMatch
         XCTAssertTrue(searchField.waitForExistence(timeout: 5))
 
+        let expandedHistoryPanel = app.descendants(matching: .any).matching(identifier: "historySearchPanel").firstMatch
+        XCTAssertFalse(expandedHistoryPanel.exists)
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+
         let homeSwitch = app.buttons.matching(identifier: "modeSwitch.homeButton").firstMatch
         XCTAssertTrue(homeSwitch.waitForExistence(timeout: 5))
         XCTAssertFalse(app.tabBars.firstMatch.exists)

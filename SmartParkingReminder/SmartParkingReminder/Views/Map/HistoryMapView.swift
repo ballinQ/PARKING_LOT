@@ -6,6 +6,7 @@ struct HistoryMapView: View {
     let sessions: [ParkingSession]
     let now: Date
     let locationService: LocationServiceProtocol
+    let modeTransitionNamespace: Namespace.ID
 
     @StateObject private var vm = HistoryMapViewModel()
     private let mapHandoff = MapHandoffService()
@@ -144,9 +145,11 @@ struct HistoryMapView: View {
         )
 
         return VStack(spacing: 0) {
-            dragHandle
-                .padding(.top, 8)
-                .padding(.bottom, 6)
+            if sheetState != .collapsed {
+                dragHandle
+                    .padding(.top, 8)
+                    .padding(.bottom, 6)
+            }
 
             VStack(spacing: 12) {
                 searchControls
@@ -157,19 +160,22 @@ struct HistoryMapView: View {
                 }
             }
             .padding(.horizontal, 16)
+            .padding(.trailing, sheetState == .collapsed ? 70 : 0)
             .padding(.bottom, max(proxy.safeAreaInsets.bottom, sheetCompactBottomPadding))
         }
         .frame(maxWidth: .infinity)
         .frame(height: height, alignment: .top)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .background(sheetBackground)
+        .clipShape(sheetShape)
         .overlay(alignment: .top) {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color(.separator).opacity(0.25), lineWidth: 0.5)
+            if sheetState != .collapsed {
+                sheetShape
+                    .stroke(Color(.separator).opacity(0.25), lineWidth: 0.5)
+            }
         }
-        .shadow(color: .black.opacity(0.22), radius: 18, y: -4)
+        .shadow(color: .black.opacity(sheetState == .collapsed ? 0 : 0.22), radius: 18, y: -4)
         .padding(.horizontal, 8)
-        .padding(.bottom, keyboardLift + 6)
+        .padding(.bottom, keyboardLift + (sheetState == .collapsed ? 0 : 6))
         .gesture(sheetDragGesture)
         .animation(.snappy, value: sheetState)
         .animation(.snappy, value: keyboardHeight)
@@ -181,6 +187,20 @@ struct HistoryMapView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var sheetBackground: some View {
+        if sheetState == .collapsed {
+            Color.clear
+        } else {
+            Rectangle()
+                .fill(.regularMaterial)
+        }
+    }
+
+    private var sheetShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: sheetState == .collapsed ? 0 : 24, style: .continuous)
     }
 
     private var dragHandle: some View {
@@ -584,7 +604,16 @@ struct HistoryMapView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(.thinMaterial)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.thinMaterial)
+                .matchedGeometryEffect(
+                    id: "modeSwitch.mapSearchMorph",
+                    in: modeTransitionNamespace,
+                    properties: .frame,
+                    isSource: false
+                )
+        }
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
